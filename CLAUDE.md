@@ -67,3 +67,4 @@ supabase status      # Show local Supabase URLs and keys
 - shadcn/ui v4 uses `render` prop (not `asChild`) for trigger composition — e.g., `<DialogTrigger render={<Button />} />`
 - Tests: co-locate with source as `*.test.ts`, use Vitest
 - Use `slugify()` from `src/lib/slugify.ts` for generating slugs from names
+- **Drizzle schema sync:** After any change to `src/lib/db/schema/`, run `DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres" npx drizzle-kit push` to push the schema to the local dev database

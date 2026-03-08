@@ -9,9 +9,13 @@ import {
   FileCode,
   Send,
   FileText,
+  BookOpen,
   Settings,
   LogOut,
+  ChevronDown,
   ChevronsUpDown,
+  Plus,
+  Check,
 } from "lucide-react";
 
 import {
@@ -25,8 +29,16 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,24 +49,34 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { createClient } from "@/lib/supabase/client";
 
+interface SidebarProject {
+  id: string;
+  name: string;
+  url: string | null;
+}
+
 interface AppSidebarProps {
   user: {
     email: string;
     name?: string | null;
     avatarUrl?: string | null;
   };
+  projects: SidebarProject[];
 }
 
 const workspaceNav = [
-  { href: "/projects", icon: FolderKanban, label: "Projects" },
   { href: "/specs", icon: FileCode, label: "Specs" },
   { href: "/destinations", icon: Send, label: "Destinations" },
   { href: "/documents", icon: FileText, label: "Documents" },
 ] as const;
 
-export function AppSidebar({ user }: AppSidebarProps) {
+export function AppSidebar({ user, projects }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+
+  // Derive selected project from URL: /projects/[id]/...
+  const projectIdFromUrl = pathname.match(/^\/projects\/([^/]+)/)?.[1] ?? null;
+  const selectedProject = projects.find((p) => p.id === projectIdFromUrl) ?? null;
 
   const initials =
     user.name
@@ -75,23 +97,55 @@ export function AppSidebar({ user }: AppSidebarProps) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              render={<Link href="/dashboard" />}
-              tooltip="Measurement Assistant"
-            >
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-foreground">
-                <BarChart3 className="size-4" />
-              </div>
-              <div className="grid flex-1 text-left leading-tight">
-                <span className="truncate text-sm font-semibold">
-                  Measurement
-                </span>
-                <span className="truncate text-xs text-muted-foreground">
-                  Assistant
-                </span>
-              </div>
-            </SidebarMenuButton>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <SidebarMenuButton
+                    size="lg"
+                    className="data-[popup-open]:bg-sidebar-accent data-[popup-open]:text-sidebar-accent-foreground"
+                  />
+                }
+              >
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-foreground">
+                  <BarChart3 className="size-4" />
+                </div>
+                <div className="grid flex-1 text-left leading-tight">
+                  <span className="truncate text-sm font-semibold">
+                    {selectedProject?.name ?? "Select project"}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    Measurement Assistant
+                  </span>
+                </div>
+                <ChevronsUpDown className="ml-auto size-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side="bottom"
+                align="start"
+                sideOffset={4}
+                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+              >
+                {projects.map((project) => (
+                  <DropdownMenuItem
+                    key={project.id}
+                    onClick={() => router.push(`/projects/${project.id}`)}
+                  >
+                    <FolderKanban className="mr-2 size-4 shrink-0" />
+                    <span className="truncate">{project.name}</span>
+                    {project.id === selectedProject?.id && (
+                      <Check className="ml-auto size-4 shrink-0" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+                {projects.length > 0 && <DropdownMenuSeparator />}
+                <DropdownMenuItem
+                  onClick={() => router.push("/dashboard")}
+                >
+                  <Plus className="mr-2 size-4 shrink-0" />
+                  <span>Manage projects</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
@@ -135,6 +189,63 @@ export function AppSidebar({ user }: AppSidebarProps) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Project */}
+        {selectedProject && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Project</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <Collapsible
+                  defaultOpen={pathname.startsWith(
+                    `/projects/${selectedProject.id}/published`
+                  )}
+                  className="group/collapsible"
+                >
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger
+                      render={
+                        <SidebarMenuButton tooltip="Documentation" />
+                      }
+                    >
+                      <BookOpen className="size-4" />
+                      <span>Documentation</span>
+                      <ChevronDown className="ml-auto size-4 transition-transform group-data-[panel-open]/collapsible:rotate-180" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            render={
+                              <Link
+                                href={`/projects/${selectedProject.id}/published/events`}
+                              />
+                            }
+                            isActive={pathname === `/projects/${selectedProject.id}/published/events`}
+                          >
+                            Events
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            render={
+                              <Link
+                                href={`/projects/${selectedProject.id}/published/parameters`}
+                              />
+                            }
+                            isActive={pathname === `/projects/${selectedProject.id}/published/parameters`}
+                          >
+                            Parameters
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {/* General */}
         <SidebarGroup>

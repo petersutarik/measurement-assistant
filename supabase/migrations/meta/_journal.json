@@ -8,6 +8,13 @@
       "when": 1772909728669,
       "tag": "0000_nasty_marauders",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1772970598715,
+      "tag": "0001_bouncy_corsair",
+      "breakpoints": true
     }
   ]
 }

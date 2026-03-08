@@ -47,6 +47,7 @@ export const events = pgTable("events", {
   category: text("category"),
   implementationNotes: text("implementation_notes"),
   sortOrder: integer("sort_order").notNull().default(0),
+  sourceEventId: uuid("source_event_id"), // root origin — first event in lineage chain
   ...timestamps,
 });
 
@@ -66,6 +67,7 @@ export const parameters = pgTable("parameters", {
   enumId: uuid("enum_id"), // FK set via relations
   origin: text("origin"),
   sortOrder: integer("sort_order").notNull().default(0),
+  sourceParameterId: uuid("source_parameter_id"), // root origin
   ...timestamps,
 });
 
