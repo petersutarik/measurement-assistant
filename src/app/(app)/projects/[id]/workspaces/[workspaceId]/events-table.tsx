@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EditEventDialog } from "./edit-event-dialog";
 import { DeleteEventDialog } from "./delete-event-dialog";
+import { ParamHoverCard } from "./param-hover-card";
 import type { Event } from "@/types";
 
 interface EventParam {
@@ -42,6 +43,8 @@ interface EventParam {
   type: string;
   isRequired: boolean;
   exampleValue: string | null;
+  description: string | null;
+  origin: string | null;
 }
 
 interface EventRow {
@@ -434,6 +437,7 @@ function EventRowComponent({
             row={row}
             projectId={projectId}
             workspaceId={workspaceId}
+            readOnly={readOnly}
           />
         </TableCell>
       ))}
@@ -494,11 +498,13 @@ function CellContent({
   row,
   projectId,
   workspaceId,
+  readOnly,
 }: {
   col: ColumnId;
   row: EventRow;
   projectId: string;
   workspaceId: string;
+  readOnly: boolean;
 }) {
   switch (col) {
     case "name":
@@ -538,12 +544,13 @@ function CellContent({
       return row.params.length > 0 ? (
         <div className="flex flex-wrap gap-1">
           {row.params.map((p) => (
-            <Badge key={p.id} variant="outline" className="text-xs font-mono">
-              {p.name}
-              <span className="ml-1 text-muted-foreground font-sans">
-                {p.type}
-              </span>
-            </Badge>
+            <ParamHoverCard
+              key={p.id}
+              param={p}
+              projectId={projectId}
+              workspaceId={workspaceId}
+              readOnly={readOnly}
+            />
           ))}
         </div>
       ) : (
