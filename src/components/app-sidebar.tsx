@@ -10,6 +10,7 @@ import {
   Send,
   FileText,
   BookOpen,
+  BrainCircuit,
   Settings,
   LogOut,
   ChevronDown,
@@ -196,6 +197,22 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
             <SidebarGroupLabel>Project</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    render={
+                      <Link
+                        href={`/projects/${selectedProject.id}/plans`}
+                      />
+                    }
+                    isActive={pathname.startsWith(
+                      `/projects/${selectedProject.id}/plans`
+                    )}
+                    tooltip="Plans"
+                  >
+                    <BrainCircuit className="size-4" />
+                    <span>Plans</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 <Collapsible
                   defaultOpen={pathname.startsWith(
                     `/projects/${selectedProject.id}/published`
