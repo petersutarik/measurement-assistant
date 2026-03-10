@@ -27,9 +27,7 @@ export const specVersions = pgTable("spec_versions", {
   forkedFromId: uuid("forked_from_id"), // self-ref, set after table definition
   publishedAt: timestamp("published_at", { withTimezone: true }),
   publishedBy: uuid("published_by").references(() => users.id),
-  createdBy: uuid("created_by")
-    .notNull()
-    .references(() => users.id),
+  createdBy: uuid("created_by").references(() => users.id), // nullable for API key auth
   ...timestamps,
 });
 

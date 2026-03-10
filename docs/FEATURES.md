@@ -90,6 +90,17 @@
 - `/projects/[id]/published` redirects to the Events sub-page
 - Empty state shown when no published version exists
 
+## REST API (v1)
+
+- **Bearer token auth** via API keys (`ma_live_<hash>`) scoped to an account
+- API key management: create (returns key once), list (shows prefix + metadata)
+- Full CRUD for projects, workspaces, events, parameters
+- **Bulk event creation** — single request creates multiple events with parameters (designed for AI agents)
+- **Published spec endpoint** — returns the latest published version with all events and parameters
+- **Publish workspace** — creates a new published version from a workspace via API
+- Consistent JSON error responses with Zod validation details (422)
+- See `docs/API.md` for full endpoint reference
+
 ## Dashboard
 
 - Welcome message with user's first name

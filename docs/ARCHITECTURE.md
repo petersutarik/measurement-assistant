@@ -62,6 +62,17 @@ Nested resources verify ownership up the chain before allowing mutations:
 - **Event actions** — `requireWorkspace(projectId, workspaceId)` verifies project → workspace chain
 - **Parameter actions** — `requireEvent(projectId, workspaceId, eventId)` verifies full chain
 
+## REST API (`src/app/api/v1/`)
+
+API-first interface for AI agents and CLI tools. Uses Bearer token auth via API keys stored in `api_keys` table (SHA-256 hashed). Auth helper at `src/lib/api/auth.ts` resolves the account → organization context.
+
+Key design decisions:
+- API keys are scoped to accounts (not users), so agents operate at the billing entity level
+- `specVersions.createdBy` is nullable to support API key auth (no user context)
+- Shared `cloneSpecData` extracted to `src/lib/api/clone.ts` (used by both server actions and API routes)
+- Bulk event endpoint (`/events/bulk`) allows creating up to 200 events with parameters in one call
+- Response helpers in `src/lib/api/response.ts` for consistent JSON responses
+
 ## Route Structure
 
 ```
@@ -72,6 +83,20 @@ Nested resources verify ownership up the chain before allowing mutations:
 /projects/[id]/published/parameters                 — published parameters table
 /projects/[id]/workspaces/[workspaceId]             — workspace detail + events table
 /projects/[id]/workspaces/[workspaceId]/events/[eventId] — event detail + parameter tree
+
+# API routes
+/api/v1/projects                                    — list/create projects
+/api/v1/projects/[projectId]                         — get/update/delete project
+/api/v1/projects/[projectId]/published               — latest published spec
+/api/v1/projects/[projectId]/workspaces              — list/create workspaces
+/api/v1/projects/[projectId]/workspaces/[workspaceId]            — get/update/delete workspace
+/api/v1/projects/[projectId]/workspaces/[workspaceId]/publish    — publish workspace
+/api/v1/projects/[projectId]/workspaces/[workspaceId]/events     — list/create events
+/api/v1/projects/[projectId]/workspaces/[workspaceId]/events/bulk — bulk create
+/api/v1/projects/[projectId]/workspaces/[workspaceId]/events/[eventId]                    — CRUD
+/api/v1/projects/[projectId]/workspaces/[workspaceId]/events/[eventId]/parameters          — list/create
+/api/v1/projects/[projectId]/workspaces/[workspaceId]/events/[eventId]/parameters/[parameterId] — CRUD
+/api/v1/api-keys                                     — create/list API keys
 ```
 
 ## Database Access

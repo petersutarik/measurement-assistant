@@ -4,20 +4,26 @@ import { eq, and } from "drizzle-orm";
 import { requireUserContext } from "@/lib/auth/user-context";
 import { db } from "@/lib/db";
 import { projects } from "@/lib/db/schema";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileCode, Send, Layers, ExternalLink, Globe, History } from "lucide-react";
-import { getWorkspacesWithEventCounts, getLatestPublished, getPublishedVersions } from "./actions";
+import {
+  FileCode,
+  Send,
+  Layers,
+  ExternalLink,
+  Globe,
+  History,
+} from "lucide-react";
+import {
+  getWorkspacesWithEventCounts,
+  getLatestPublished,
+  getPublishedVersions,
+} from "./actions";
 import { CreateWorkspaceDialog } from "./create-workspace-dialog";
 import { WorkspaceCard } from "./workspace-card";
 import { EditVersionDialog } from "./edit-version-dialog";
+import { getProjectFaviconUrl, parseProjectUrl } from "@/lib/project-url";
 
 export default async function ProjectDetailPage({
   params,
@@ -37,21 +43,32 @@ export default async function ProjectDetailPage({
 
   if (!project) notFound();
 
-  const [workspacesWithCounts, latestPublished, publishedVersions] = await Promise.all([
-    getWorkspacesWithEventCounts(id),
-    getLatestPublished(id),
-    getPublishedVersions(id),
-  ]);
+  const [workspacesWithCounts, latestPublished, publishedVersions] =
+    await Promise.all([
+      getWorkspacesWithEventCounts(id),
+      getLatestPublished(id),
+      getPublishedVersions(id),
+    ]);
   const workspaceCount = workspacesWithCounts.length;
   const totalEvents = workspacesWithCounts.reduce(
     (sum, w) => sum + w.eventCount,
     0
   );
+  const projectSite = parseProjectUrl(project.url);
 
   return (
     <div className="space-y-6">
       <div>
         <div className="flex items-center gap-3">
+          {projectSite && (
+            <img
+              src={getProjectFaviconUrl(projectSite.hostname, 64)}
+              alt=""
+              width={28}
+              height={28}
+              className="shrink-0 rounded"
+            />
+          )}
           <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
           <Badge variant="secondary">{project.slug}</Badge>
           {latestPublished && (
@@ -60,7 +77,11 @@ export default async function ProjectDetailPage({
                 <Globe className="mr-1 size-3" />
                 Live v{latestPublished.versionNumber}
               </Badge>
-              <Button variant="outline" size="sm" render={<Link href={`/projects/${id}/published`} />}>
+              <Button
+                variant="outline"
+                size="sm"
+                render={<Link href={`/projects/${id}/published`} />}
+              >
                 View published spec
               </Button>
             </>
@@ -74,14 +95,14 @@ export default async function ProjectDetailPage({
         {project.description && (
           <p className="text-muted-foreground mt-1">{project.description}</p>
         )}
-        {project.url && (
+        {projectSite && (
           <a
-            href={project.url}
+            href={projectSite.href}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline"
           >
-            {project.url}
+            {projectSite.href}
             <ExternalLink className="size-3" />
           </a>
         )}

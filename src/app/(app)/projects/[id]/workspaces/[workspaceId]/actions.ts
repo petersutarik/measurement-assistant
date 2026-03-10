@@ -65,6 +65,8 @@ export async function getEventsWithParams(
             type: parameters.type,
             isRequired: parameters.isRequired,
             exampleValue: parameters.exampleValue,
+            description: parameters.description,
+            origin: parameters.origin,
           })
           .from(parameters)
           .where(
@@ -195,6 +197,44 @@ export async function updateEvent(
       implementationNotes,
     })
     .where(eq(events.id, eventId));
+
+  revalidateWorkspace(projectId, workspaceId);
+}
+
+
+export async function updateParameterField(
+  projectId: string,
+  workspaceId: string,
+  eventId: string,
+  parameterId: string,
+  field: "name" | "type" | "description" | "isRequired" | "exampleValue" | "origin",
+  value: string | boolean
+) {
+  await requireWorkspace(projectId, workspaceId);
+
+  const [existing] = await db
+    .select()
+    .from(parameters)
+    .where(
+      and(eq(parameters.id, parameterId), eq(parameters.eventId, eventId))
+    )
+    .limit(1);
+  if (!existing) throw new Error("Parameter not found");
+
+  if (field === "name" && typeof value === "string" && !value.trim())
+    throw new Error("Name is required");
+
+  const setValue =
+    field === "isRequired"
+      ? { [field]: Boolean(value) }
+      : field === "type"
+        ? { [field]: value as "string" | "number" | "boolean" | "array" | "object" }
+        : { [field]: (value as string) || null };
+
+  await db
+    .update(parameters)
+    .set(setValue)
+    .where(eq(parameters.id, parameterId));
 
   revalidateWorkspace(projectId, workspaceId);
 }

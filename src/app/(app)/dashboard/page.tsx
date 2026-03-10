@@ -1,8 +1,5 @@
 import Link from "next/link";
-import { eq, count, and, inArray, desc } from "drizzle-orm";
 import { requireUserContext } from "@/lib/auth/user-context";
-import { db } from "@/lib/db";
-import { projects, specVersions, events } from "@/lib/db/schema";
 import {
   Card,
   CardContent,
@@ -11,7 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FolderKanban, FileCode, Send, Layers, Globe } from "lucide-react";
+import { FolderKanban, Globe } from "lucide-react";
 import { CreateProjectDialog } from "../projects/create-project-dialog";
 import { CreateWorkspaceDialog } from "../projects/[id]/create-workspace-dialog";
 import { WorkspaceCard } from "../projects/[id]/workspace-card";
@@ -20,12 +17,15 @@ import {
   getLatestPublished,
 } from "../projects/[id]/actions";
 import { getProjects } from "../projects/actions";
+import { getProjectFaviconUrl, parseProjectUrl } from "@/lib/project-url";
 
 export default async function DashboardPage() {
-  const { user, organization } = await requireUserContext();
+  const { user } = await requireUserContext();
 
   const name = user.name ?? user.email;
-  const firstName = name.includes("@") ? name.split("@")[0] : name.split(" ")[0];
+  const firstName = name.includes("@")
+    ? name.split("@")[0]
+    : name.split(" ")[0];
 
   const allProjects = await getProjects();
 
@@ -36,7 +36,12 @@ export default async function DashboardPage() {
         getWorkspacesWithEventCounts(project.id),
         getLatestPublished(project.id),
       ]);
-      return { project, workspacesWithCounts, latestPublished };
+      return {
+        project,
+        projectSite: parseProjectUrl(project.url),
+        workspacesWithCounts,
+        latestPublished,
+      };
     })
   );
 
@@ -70,51 +75,71 @@ export default async function DashboardPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {projectData.map(({ project, workspacesWithCounts, latestPublished }) => (
-              <Card key={project.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Link href={`/projects/${project.id}`}>
-                        <CardTitle className="text-base hover:underline">
-                          {project.name}
-                        </CardTitle>
-                      </Link>
-                      {latestPublished && (
-                        <Badge className="bg-green-600 text-white hover:bg-green-700">
-                          <Globe className="mr-1 size-3" />
-                          Live v{latestPublished.versionNumber}
-                        </Badge>
-                      )}
+            {projectData.map(
+              ({
+                project,
+                projectSite,
+                workspacesWithCounts,
+                latestPublished,
+              }) => (
+                <Card key={project.id}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        {projectSite ? (
+                          <img
+                            src={getProjectFaviconUrl(projectSite.hostname, 32)}
+                            alt=""
+                            width={20}
+                            height={20}
+                            className="shrink-0 rounded"
+                          />
+                        ) : (
+                          <FolderKanban className="size-5 shrink-0 text-muted-foreground" />
+                        )}
+                        <Link href={`/projects/${project.id}`}>
+                          <CardTitle className="text-base hover:underline">
+                            {project.name}
+                          </CardTitle>
+                        </Link>
+                        {latestPublished && (
+                          <Badge className="bg-green-600 text-white hover:bg-green-700">
+                            <Globe className="mr-1 size-3" />
+                            Live v{latestPublished.versionNumber}
+                          </Badge>
+                        )}
+                      </div>
+                      <CreateWorkspaceDialog projectId={project.id} />
                     </div>
-                    <CreateWorkspaceDialog projectId={project.id} />
-                  </div>
-                  {project.description && (
-                    <CardDescription>{project.description}</CardDescription>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  {workspacesWithCounts.length > 0 ? (
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {workspacesWithCounts.map((row) => (
-                        <WorkspaceCard
-                          key={row.workspace.id}
-                          projectId={project.id}
-                          workspace={row.workspace}
-                          eventCount={row.eventCount}
-                          forkedFromVersion={row.forkedFromVersion}
-                          latestPublishedVersion={latestPublished?.versionNumber ?? null}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No workspaces yet. Create one to start documenting.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                    {project.description && (
+                      <CardDescription>{project.description}</CardDescription>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    {workspacesWithCounts.length > 0 ? (
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {workspacesWithCounts.map((row) => (
+                          <WorkspaceCard
+                            key={row.workspace.id}
+                            projectId={project.id}
+                            workspace={row.workspace}
+                            eventCount={row.eventCount}
+                            forkedFromVersion={row.forkedFromVersion}
+                            latestPublishedVersion={
+                              latestPublished?.versionNumber ?? null
+                            }
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No workspaces yet. Create one to start documenting.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            )}
           </div>
         )}
       </div>

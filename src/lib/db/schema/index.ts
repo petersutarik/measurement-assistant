@@ -6,4 +6,5 @@ export * from "./custom-fields";
 export * from "./documents";
 export * from "./qa";
 export * from "./comments";
+export * from "./api-keys";
 export * from "./plans";
