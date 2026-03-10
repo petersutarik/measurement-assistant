@@ -193,7 +193,15 @@ export default async function ProjectDetailPage({
                 <Button
                   variant="ghost"
                   size="sm"
-                  render={<Link href={`/projects/${id}/published`} />}
+                  render={
+                    <Link
+                      href={
+                        version.versionNumber === latestPublished?.versionNumber
+                          ? `/projects/${id}/published`
+                          : `/projects/${id}/versions/${version.versionNumber}`
+                      }
+                    />
+                  }
                 >
                   <ExternalLink className="size-4" />
                 </Button>

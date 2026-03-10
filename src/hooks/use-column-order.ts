@@ -1,11 +1,13 @@
 "use client";
 
+import type React from "react";
 import { useState, useCallback, useEffect } from "react";
 
 export interface ColumnDef {
   id: string;
   label: string;
   alwaysVisible?: boolean;
+  icon?: React.ComponentType<{ className?: string }>;
 }
 
 interface StoredPrefs {

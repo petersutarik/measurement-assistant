@@ -36,6 +36,7 @@ import type {
   comments,
   eventAttachments,
   // Plans
+  planTemplates,
   measurementPlans,
   planContextSources,
 } from "@/lib/db/schema";
@@ -91,6 +92,7 @@ export type Comment = InferSelectModel<typeof comments>;
 export type EventAttachment = InferSelectModel<typeof eventAttachments>;
 
 // Plans
+export type PlanTemplate = InferSelectModel<typeof planTemplates>;
 export type MeasurementPlan = InferSelectModel<typeof measurementPlans>;
 export type PlanContextSource = InferSelectModel<typeof planContextSources>;
 

@@ -1,5 +1,10 @@
 import { notFound } from "next/navigation";
-import { getPlan, getContextSources, getProjectEntities } from "../actions";
+import {
+  getPlan,
+  getContextSources,
+  getProjectEntities,
+  getTemplates,
+} from "../actions";
 import { PlanBuilder } from "./plan-builder";
 
 export default async function PlanDetailPage({
@@ -17,9 +22,10 @@ export default async function PlanDetailPage({
     notFound();
   }
 
-  const [contextSources, entities] = await Promise.all([
+  const [contextSources, entities, templates] = await Promise.all([
     getContextSources(planId),
     getProjectEntities(id),
+    getTemplates(),
   ]);
 
   return (
@@ -53,6 +59,12 @@ export default async function PlanDetailPage({
         type: p.type,
         eventId: p.eventId,
         description: p.description,
+      }))}
+      templates={templates.map((t) => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        document: t.document,
       }))}
     />
   );

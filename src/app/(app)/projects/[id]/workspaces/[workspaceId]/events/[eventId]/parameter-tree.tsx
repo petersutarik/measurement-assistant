@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { ParamTypeIcon } from "@/components/param-type-icon";
 import { CreateParameterDialog } from "./create-parameter-dialog";
 import { EditParameterDialog } from "./edit-parameter-dialog";
 import { DeleteParameterDialog } from "./delete-parameter-dialog";
@@ -54,7 +55,8 @@ function ParameterNode({
         style={{ paddingLeft: `${depth * 24 + 12}px` }}
       >
         <span className="font-mono text-sm font-medium">{p.name}</span>
-        <Badge variant="outline" className="text-xs">
+        <Badge variant="outline" className="text-xs gap-1">
+          <ParamTypeIcon type={p.type} className="size-3" />
           {p.type}
         </Badge>
         {p.isRequired && (

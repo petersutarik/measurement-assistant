@@ -22,7 +22,7 @@ export default async function PublicLayout({
             Measurement Assistant
           </Link>
           {user ? (
-            <Link href="/dashboard" className={btnLink}>
+            <Link href="/projects" className={btnLink}>
               Dashboard
             </Link>
           ) : (

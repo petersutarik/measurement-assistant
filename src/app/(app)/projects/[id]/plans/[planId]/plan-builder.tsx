@@ -18,6 +18,10 @@ import {
 import { updatePlanDocument, updatePlanMessages } from "../actions";
 import type { PlanMessage } from "@/types";
 
+const MENTION_TYPE_COLORS: Record<string, string> = {
+  template: "bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300",
+};
+
 interface ContextSourceSummary {
   id: string;
   type: string;
@@ -40,6 +44,13 @@ interface ExistingParameter {
   description: string | null;
 }
 
+interface TemplateSummary {
+  id: string;
+  name: string;
+  description: string;
+  document: string;
+}
+
 interface PlanBuilderProps {
   projectId: string;
   planId: string;
@@ -49,6 +60,7 @@ interface PlanBuilderProps {
   contextSources?: ContextSourceSummary[];
   existingEvents?: ExistingEvent[];
   existingParameters?: ExistingParameter[];
+  templates?: TemplateSummary[];
 }
 
 function parseDocumentFromResponse(text: string): {
@@ -64,7 +76,7 @@ function parseDocumentFromResponse(text: string): {
 
 // ── Mention types ───────────────────────────────────────────────────
 interface MentionItem {
-  type: "event" | "param" | "category" | "context";
+  type: "event" | "param" | "category" | "context" | "template";
   label: string;
   value: string; // what gets inserted
   detail?: string;
@@ -79,6 +91,7 @@ export function PlanBuilder({
   contextSources = [],
   existingEvents = [],
   existingParameters = [],
+  templates = [],
 }: PlanBuilderProps) {
   const [messages, setMessages] = useState<PlanMessage[]>(initialMessages);
   const [document, setDocument] = useState(initialDocument);
@@ -144,13 +157,25 @@ export function PlanBuilder({
       value: `@context:${s.name}`,
       detail: s.type,
     })),
+    // Templates
+    ...templates.map((t) => ({
+      type: "template" as const,
+      label: t.name,
+      value: `@template:${t.name}`,
+      detail: t.description.slice(0, 50),
+    })),
   ];
 
   const filteredMentions =
     mentionQuery !== null
-      ? allMentionItems.filter((m) =>
-          m.label.toLowerCase().includes(mentionQuery.toLowerCase())
-        )
+      ? allMentionItems.filter((m) => {
+          const q = mentionQuery.toLowerCase();
+          return (
+            m.label.toLowerCase().includes(q) ||
+            m.type.toLowerCase().includes(q) ||
+            `${m.type}:${m.label}`.toLowerCase().includes(q)
+          );
+        })
       : [];
 
   function handleInputChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -229,12 +254,31 @@ export function PlanBuilder({
     }
   }, [selectedText]);
 
+  function expandTemplateRefs(text: string): string {
+    // Replace each known template reference with its full document
+    let result = text;
+    for (const tmpl of templates) {
+      const ref = `@template:${tmpl.name}`;
+      if (result.includes(ref)) {
+        result = result.replace(
+          ref,
+          `[Template: ${tmpl.name}]\n\n${tmpl.document}`
+        );
+      }
+    }
+    return result;
+  }
+
   async function handleSend() {
     if (!input.trim() || isStreaming) return;
 
+    // Expand template references for the AI, keep original for display
+    const displayContent = input.trim();
+    const expandedContent = expandTemplateRefs(displayContent);
+
     const userMessage: PlanMessage = {
       role: "user",
-      content: input.trim(),
+      content: displayContent,
       timestamp: new Date().toISOString(),
     };
 
@@ -243,12 +287,18 @@ export function PlanBuilder({
     setInput("");
     setIsStreaming(true);
 
+    // Build messages with expanded template content for the API
+    const apiMessages = [
+      ...messages.map((m) => ({ ...m })),
+      { ...userMessage, content: expandedContent },
+    ];
+
     try {
       const response = await fetch("/api/plans/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: newMessages,
+          messages: apiMessages,
           document,
           contextSources,
           existingEvents,
@@ -523,7 +573,7 @@ export function PlanBuilder({
                     >
                       <Badge
                         variant="outline"
-                        className="text-[10px] px-1 py-0 shrink-0"
+                        className={`text-[10px] px-1 py-0 shrink-0 ${MENTION_TYPE_COLORS[item.type] ?? ""}`}
                       >
                         {item.type}
                       </Badge>

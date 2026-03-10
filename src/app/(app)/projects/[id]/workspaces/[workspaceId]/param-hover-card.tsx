@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Badge } from "@/components/ui/badge";
+import { ParamTypeIcon } from "@/components/param-type-icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -51,11 +52,9 @@ export function ParamHoverCard({
         openOnHover
         delay={200}
         render={
-          <Badge variant="outline" className="text-xs font-mono cursor-pointer">
+          <Badge variant="outline" className="text-xs font-mono cursor-pointer gap-1">
             {param.name}
-            <span className="ml-1 text-muted-foreground font-sans">
-              {param.type}
-            </span>
+            <ParamTypeIcon type={param.type} className="size-3 text-muted-foreground" />
           </Badge>
         }
       />
@@ -81,7 +80,8 @@ function ReadOnlyDetails({ param }: { param: EventParam }) {
   return (
     <div className="space-y-2 text-sm">
       <DetailRow label="Type">
-        <Badge variant="secondary" className="text-xs">
+        <Badge variant="secondary" className="text-xs gap-1">
+          <ParamTypeIcon type={param.type} className="size-3" />
           {param.type}
         </Badge>
       </DetailRow>

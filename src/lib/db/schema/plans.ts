@@ -1,6 +1,19 @@
 import { pgTable, uuid, text, jsonb } from "drizzle-orm/pg-core";
 import { timestamps, planStatusEnum, contextSourceTypeEnum } from "./_helpers";
-import { projects, users } from "./tenant";
+import { accounts, projects, users } from "./tenant";
+
+// ── Plan Templates ──────────────────────────────────────────────────
+// Account-scoped templates; null accountId = system-wide built-in
+export const planTemplates = pgTable("plan_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  accountId: uuid("account_id").references(() => accounts.id, {
+    onDelete: "cascade",
+  }),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  document: text("document").notNull().default(""),
+  ...timestamps,
+});
 
 // ── Measurement Plans ───────────────────────────────────────────────
 export const measurementPlans = pgTable("measurement_plans", {

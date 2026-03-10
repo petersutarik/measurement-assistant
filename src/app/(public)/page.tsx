@@ -55,7 +55,7 @@ export default async function LandingPage() {
         </p>
         <div className="mt-8 flex items-center justify-center gap-3">
           {user ? (
-            <Link href="/dashboard" className={btnPrimary}>
+            <Link href="/projects" className={btnPrimary}>
               Go to Dashboard
             </Link>
           ) : (
@@ -93,7 +93,7 @@ export default async function LandingPage() {
           Start generating specs in minutes, not days.
         </p>
         {user ? (
-          <Link href="/dashboard" className={`${btnPrimary} mt-6`}>
+          <Link href="/projects" className={`${btnPrimary} mt-6`}>
             Go to Dashboard
           </Link>
         ) : (

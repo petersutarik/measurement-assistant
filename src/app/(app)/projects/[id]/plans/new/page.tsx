@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,8 +23,18 @@ import {
   ArrowRight,
   ArrowLeft,
   Sparkles,
+  ShoppingCart,
+  Target,
+  LayoutDashboard,
+  Check,
 } from "lucide-react";
-import { createPlan, addContextNote, addContextUrl } from "../actions";
+import {
+  createPlan,
+  addContextNote,
+  addContextUrl,
+  getTemplates,
+} from "../actions";
+import type { PlanTemplate } from "@/types";
 
 type ContextItem = {
   id: string;
@@ -34,6 +44,12 @@ type ContextItem = {
   url?: string;
 };
 
+const TEMPLATE_ICONS: Record<string, React.ReactNode> = {
+  "E-commerce": <ShoppingCart className="size-5" />,
+  "Lead Generation": <Target className="size-5" />,
+  "SaaS / Web Application": <LayoutDashboard className="size-5" />,
+};
+
 export default function NewPlanPage({
   params,
 }: {
@@ -41,6 +57,9 @@ export default function NewPlanPage({
 }) {
   const [step, setStep] = useState<1 | 2>(1);
   const [title, setTitle] = useState("");
+  const [selectedTemplate, setSelectedTemplate] =
+    useState<PlanTemplate | null>(null);
+  const [templates, setTemplates] = useState<PlanTemplate[]>([]);
   const [contextItems, setContextItems] = useState<ContextItem[]>([]);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -53,6 +72,10 @@ export default function NewPlanPage({
   // URL form
   const [urlInput, setUrlInput] = useState("");
   const [showUrlForm, setShowUrlForm] = useState(false);
+
+  useEffect(() => {
+    getTemplates().then(setTemplates);
+  }, []);
 
   function addNote() {
     if (!noteContent.trim()) return;
@@ -90,7 +113,11 @@ export default function NewPlanPage({
   async function handleCreate() {
     const { id } = await params;
     startTransition(async () => {
-      const plan = await createPlan(id, title || "Untitled Plan");
+      const plan = await createPlan(
+        id,
+        title || selectedTemplate?.name || "Untitled Plan",
+        selectedTemplate?.document
+      );
 
       // Save context sources (URLs will be fetched server-side)
       for (const item of contextItems) {
@@ -135,10 +162,67 @@ export default function NewPlanPage({
           <CardHeader>
             <CardTitle>New Measurement Plan</CardTitle>
             <CardDescription>
-              Give your plan a name. You can change it later.
+              Start from a template or blank. You can customize everything later.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
+            {/* Template selection */}
+            {templates.length > 0 && (
+              <div className="space-y-3">
+                <Label>Template</Label>
+                <div className="grid gap-3">
+                  {templates.map((template) => (
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => {
+                        if (selectedTemplate?.id === template.id) {
+                          setSelectedTemplate(null);
+                        } else {
+                          setSelectedTemplate(template);
+                          if (!title) setTitle(template.name);
+                        }
+                      }}
+                      className={`flex items-start gap-3 rounded-lg border p-4 text-left transition-colors hover:bg-accent/50 ${
+                        selectedTemplate?.id === template.id
+                          ? "border-primary bg-primary/5 ring-1 ring-primary"
+                          : "border-border"
+                      }`}
+                    >
+                      <div
+                        className={`mt-0.5 shrink-0 ${selectedTemplate?.id === template.id ? "text-primary" : "text-muted-foreground"}`}
+                      >
+                        {TEMPLATE_ICONS[template.name] || (
+                          <FileText className="size-5" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">
+                            {template.name}
+                          </span>
+                          {!template.accountId && (
+                            <Badge
+                              variant="secondary"
+                              className="text-[10px] px-1.5 py-0"
+                            >
+                              Built-in
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {template.description}
+                        </p>
+                      </div>
+                      {selectedTemplate?.id === template.id && (
+                        <Check className="size-4 text-primary shrink-0 mt-0.5" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="title">Plan title</Label>
               <Input

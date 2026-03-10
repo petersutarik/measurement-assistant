@@ -1,12 +1,13 @@
 "use server";
 
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, or, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireUserContext } from "@/lib/auth/user-context";
 import { db } from "@/lib/db";
 import {
   measurementPlans,
   planContextSources,
+  planTemplates,
   projects,
   events,
   parameters,
@@ -57,18 +58,37 @@ export async function getPlan(projectId: string, planId: string) {
   return { plan, ctx };
 }
 
-export async function createPlan(projectId: string, title: string) {
+export async function createPlan(
+  projectId: string,
+  title: string,
+  document?: string
+) {
   const { user } = await requireProject(projectId);
   const [plan] = await db
     .insert(measurementPlans)
     .values({
       projectId,
       title,
+      document: document ?? "",
       createdBy: user.id,
     })
     .returning();
   revalidatePath(`/projects/${projectId}/plans`);
   return plan;
+}
+
+export async function getTemplates() {
+  const ctx = await requireUserContext();
+  return db
+    .select()
+    .from(planTemplates)
+    .where(
+      or(
+        isNull(planTemplates.accountId),
+        eq(planTemplates.accountId, ctx.account.id)
+      )
+    )
+    .orderBy(planTemplates.name);
 }
 
 export async function updatePlanDocument(

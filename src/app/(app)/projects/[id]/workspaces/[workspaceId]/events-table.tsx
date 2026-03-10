@@ -10,6 +10,14 @@ import {
   Pencil,
   Trash2,
   ExternalLink,
+  Type,
+  Zap,
+  Tag,
+  FileText,
+  Braces,
+  Globe,
+  Code,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   Table,
@@ -67,13 +75,13 @@ interface EventsTableProps {
 }
 
 const BUILTIN_COLUMNS: ColumnDef[] = [
-  { id: "name", label: "Name", alwaysVisible: true },
-  { id: "trigger", label: "Trigger" },
-  { id: "category", label: "Category" },
-  { id: "pagePattern", label: "Page pattern" },
-  { id: "description", label: "Description" },
-  { id: "parameters", label: "Parameters" },
-  { id: "codeExample", label: "Code example" },
+  { id: "name", label: "Name", alwaysVisible: true, icon: Type },
+  { id: "trigger", label: "Trigger", icon: Zap },
+  { id: "category", label: "Category", icon: Tag },
+  { id: "pagePattern", label: "Page pattern", icon: Globe },
+  { id: "description", label: "Description", icon: FileText },
+  { id: "parameters", label: "Parameters", icon: Braces },
+  { id: "codeExample", label: "Code example", icon: Code },
 ];
 
 const DEFAULT_VISIBLE = ["name", "trigger", "category", "parameters"];
@@ -97,7 +105,7 @@ export function EventsTable({
   const allColumns = useMemo<ColumnDef[]>(
     () => [
       ...BUILTIN_COLUMNS,
-      ...eventCfDefs.map((d) => ({ id: `cf_${d.id}`, label: d.name })),
+      ...eventCfDefs.map((d) => ({ id: `cf_${d.id}`, label: d.name, icon: SlidersHorizontal })),
     ],
     [eventCfDefs]
   );

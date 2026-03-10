@@ -42,7 +42,7 @@ export async function createProject(formData: FormData) {
   });
 
   revalidatePath("/projects");
-  revalidatePath("/dashboard");
+
 }
 
 export async function updateProject(id: string, formData: FormData) {
@@ -83,7 +83,7 @@ export async function updateProject(id: string, formData: FormData) {
     .where(eq(projects.id, id));
 
   revalidatePath("/projects");
-  revalidatePath("/dashboard");
+
 }
 
 export async function deleteProject(id: string) {
@@ -105,5 +105,5 @@ export async function deleteProject(id: string) {
   await db.delete(projects).where(eq(projects.id, id));
 
   revalidatePath("/projects");
-  revalidatePath("/dashboard");
+
 }

@@ -17,6 +17,7 @@ import {
   ChevronsUpDown,
   Plus,
   Check,
+  LayoutTemplate,
 } from "lucide-react";
 
 import {
@@ -69,7 +70,6 @@ interface AppSidebarProps {
 const workspaceNav = [
   { href: "/specs", icon: FileCode, label: "Specs" },
   { href: "/destinations", icon: Send, label: "Destinations" },
-  { href: "/documents", icon: FileText, label: "Documents" },
 ] as const;
 
 export function AppSidebar({ user, projects }: AppSidebarProps) {
@@ -172,7 +172,9 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
                   );
                 })}
                 {projects.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuItem onClick={() => router.push("/dashboard")}>
+                <DropdownMenuItem
+                  onClick={() => router.push("/projects")}
+                >
                   <Plus className="mr-2 size-4 shrink-0" />
                   <span>Manage projects</span>
                 </DropdownMenuItem>
@@ -189,8 +191,8 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  render={<Link href="/dashboard" />}
-                  isActive={pathname === "/dashboard"}
+                  render={<Link href={selectedProject ? `/projects/${selectedProject.id}` : "/projects"} />}
+                  isActive={!!selectedProject && pathname === `/projects/${selectedProject.id}`}
                   tooltip="Dashboard"
                 >
                   <LayoutDashboard className="size-4" />
@@ -242,6 +244,22 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
                   >
                     <BrainCircuit className="size-4" />
                     <span>Plans</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    render={
+                      <Link
+                        href={`/projects/${selectedProject.id}/documents`}
+                      />
+                    }
+                    isActive={pathname.startsWith(
+                      `/projects/${selectedProject.id}/documents`
+                    )}
+                    tooltip="Documents"
+                  >
+                    <FileText className="size-4" />
+                    <span>Documents</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <Collapsible
@@ -320,6 +338,16 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
           <SidebarGroupLabel>General</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={<Link href="/templates" />}
+                  isActive={pathname.startsWith("/templates")}
+                  tooltip="Templates"
+                >
+                  <LayoutTemplate className="size-4" />
+                  <span>Templates</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   render={<Link href="/settings" />}

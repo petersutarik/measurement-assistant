@@ -45,11 +45,50 @@ export async function getLatestPublished(projectId: string) {
   return published ?? null;
 }
 
-/** Returns events with params for the latest published spec version. */
-export async function getPublishedEventsWithParams(projectId: string) {
+/** Returns a specific published spec version by version number, or null. */
+export async function getPublishedByVersionNumber(
+  projectId: string,
+  versionNumber: number
+) {
+  await requireProject(projectId);
+  const [published] = await db
+    .select()
+    .from(specVersions)
+    .where(
+      and(
+        eq(specVersions.projectId, projectId),
+        eq(specVersions.type, "published"),
+        eq(specVersions.versionNumber, versionNumber)
+      )
+    )
+    .limit(1);
+  return published ?? null;
+}
+
+/** Returns events with params for a published spec version. Uses latest if specVersionId not provided. */
+export async function getPublishedEventsWithParams(
+  projectId: string,
+  specVersionId?: string
+) {
   await requireProject(projectId);
 
-  const published = await getLatestPublished(projectId);
+  let published;
+  if (specVersionId) {
+    const [row] = await db
+      .select()
+      .from(specVersions)
+      .where(
+        and(
+          eq(specVersions.id, specVersionId),
+          eq(specVersions.projectId, projectId),
+          eq(specVersions.type, "published")
+        )
+      )
+      .limit(1);
+    published = row ?? null;
+  } else {
+    published = await getLatestPublished(projectId);
+  }
   if (!published) return null;
 
   const allEvents = await db
@@ -96,11 +135,30 @@ export async function getPublishedEventsWithParams(projectId: string) {
   };
 }
 
-/** Returns all parameters for the latest published spec version, grouped with their event names. */
-export async function getPublishedParameters(projectId: string) {
+/** Returns all parameters for a published spec version, grouped with their event names. Uses latest if specVersionId not provided. */
+export async function getPublishedParameters(
+  projectId: string,
+  specVersionId?: string
+) {
   await requireProject(projectId);
 
-  const published = await getLatestPublished(projectId);
+  let published;
+  if (specVersionId) {
+    const [row] = await db
+      .select()
+      .from(specVersions)
+      .where(
+        and(
+          eq(specVersions.id, specVersionId),
+          eq(specVersions.projectId, projectId),
+          eq(specVersions.type, "published")
+        )
+      )
+      .limit(1);
+    published = row ?? null;
+  } else {
+    published = await getLatestPublished(projectId);
+  }
   if (!published) return null;
 
   const allEvents = await db

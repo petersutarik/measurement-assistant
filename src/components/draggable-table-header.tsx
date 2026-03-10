@@ -53,6 +53,7 @@ function SortableTableHead({ column }: { column: ColumnDef }) {
         >
           <GripVertical className="size-3.5" />
         </button>
+        {column.icon && <column.icon className="size-3.5 text-muted-foreground" />}
         <span>{column.label}</span>
       </div>
     </TableHead>

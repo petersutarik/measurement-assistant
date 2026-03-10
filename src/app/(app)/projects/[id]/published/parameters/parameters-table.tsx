@@ -1,7 +1,18 @@
 "use client";
 
 import { useMemo } from "react";
-import { Columns3, Group, ChevronDown } from "lucide-react";
+import {
+  Columns3,
+  Group,
+  ChevronDown,
+  Type,
+  Braces,
+  ShieldCheck,
+  FileText,
+  Code,
+  Layers,
+  SlidersHorizontal,
+} from "lucide-react";
 import {
   Table,
   TableBody,
@@ -10,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { ParamTypeIcon } from "@/components/param-type-icon";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -43,12 +55,12 @@ interface ParametersTableProps {
 }
 
 const BUILTIN_COLUMNS: ColumnDef[] = [
-  { id: "name", label: "Name", alwaysVisible: true },
-  { id: "type", label: "Type" },
-  { id: "required", label: "Required" },
-  { id: "description", label: "Description" },
-  { id: "exampleValue", label: "Example value" },
-  { id: "events", label: "Events" },
+  { id: "name", label: "Name", alwaysVisible: true, icon: Type },
+  { id: "type", label: "Type", icon: Braces },
+  { id: "required", label: "Required", icon: ShieldCheck },
+  { id: "description", label: "Description", icon: FileText },
+  { id: "exampleValue", label: "Example value", icon: Code },
+  { id: "events", label: "Events", icon: Layers },
 ];
 
 const DEFAULT_VISIBLE = ["name", "type", "required", "events"];
@@ -68,7 +80,7 @@ export function ParametersTable({
   const allColumns = useMemo<ColumnDef[]>(
     () => [
       ...BUILTIN_COLUMNS,
-      ...paramCfDefs.map((d) => ({ id: `cf_${d.id}`, label: d.name })),
+      ...paramCfDefs.map((d) => ({ id: `cf_${d.id}`, label: d.name, icon: SlidersHorizontal })),
     ],
     [paramCfDefs]
   );
@@ -332,7 +344,12 @@ function CellContent({
     case "name":
       return <span className="font-medium font-mono">{row.name}</span>;
     case "type":
-      return <Badge variant="secondary">{row.type}</Badge>;
+      return (
+        <Badge variant="secondary" className="gap-1">
+          <ParamTypeIcon type={row.type} className="size-3" />
+          {row.type}
+        </Badge>
+      );
     case "required":
       return row.isRequired ? (
         <Badge variant="default" className="text-xs">

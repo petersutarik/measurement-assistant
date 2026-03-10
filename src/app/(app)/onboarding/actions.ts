@@ -68,5 +68,5 @@ export async function completeOnboarding(formData: FormData) {
       slug: orgSlug,
     });
 
-  redirect("/dashboard");
+  redirect("/projects");
 }
