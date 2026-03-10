@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { createClient } from "@/lib/supabase/client";
+import { getProjectFaviconUrl, parseProjectUrl } from "@/lib/project-url";
 
 interface SidebarProject {
   id: string;
@@ -76,7 +77,9 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
 
   // Derive selected project from URL: /projects/[id]/...
   const projectIdFromUrl = pathname.match(/^\/projects\/([^/]+)/)?.[1] ?? null;
-  const selectedProject = projects.find((p) => p.id === projectIdFromUrl) ?? null;
+  const selectedProject =
+    projects.find((p) => p.id === projectIdFromUrl) ?? null;
+  const selectedProjectSite = parseProjectUrl(selectedProject?.url);
 
   const initials =
     user.name
@@ -106,9 +109,9 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
                   />
                 }
               >
-                {selectedProject?.url ? (
+                {selectedProjectSite ? (
                   <img
-                    src={`https://www.google.com/s2/favicons?domain=${new URL(selectedProject.url).hostname}&sz=32`}
+                    src={getProjectFaviconUrl(selectedProjectSite.hostname, 32)}
                     alt=""
                     width={32}
                     height={32}
@@ -121,12 +124,14 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
                 )}
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate text-sm font-semibold">
-                    {selectedProject?.url
-                      ? new URL(selectedProject.url).hostname
-                      : "Select project"}
+                    {selectedProjectSite?.hostname ??
+                      selectedProject?.name ??
+                      "Select project"}
                   </span>
                   <span className="truncate text-xs text-muted-foreground">
-                    {selectedProject?.name ?? "Measurement Assistant"}
+                    {selectedProjectSite
+                      ? selectedProject?.name
+                      : "Measurement Assistant"}
                   </span>
                 </div>
                 <ChevronsUpDown className="ml-auto size-4" />
@@ -137,36 +142,36 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
                 sideOffset={4}
                 className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
               >
-                {projects.map((project) => (
-                  <DropdownMenuItem
-                    key={project.id}
-                    onClick={() => router.push(`/projects/${project.id}`)}
-                  >
-                    {project.url ? (
-                      <img
-                        src={`https://www.google.com/s2/favicons?domain=${new URL(project.url).hostname}&sz=32`}
-                        alt=""
-                        width={16}
-                        height={16}
-                        className="mr-2 size-4 shrink-0 rounded-sm"
-                      />
-                    ) : (
-                      <FolderKanban className="mr-2 size-4 shrink-0" />
-                    )}
-                    <span className="truncate">
-                      {project.url
-                        ? new URL(project.url).hostname
-                        : project.name}
-                    </span>
-                    {project.id === selectedProject?.id && (
-                      <Check className="ml-auto size-4 shrink-0" />
-                    )}
-                  </DropdownMenuItem>
-                ))}
+                {projects.map((project) => {
+                  const projectSite = parseProjectUrl(project.url);
+
+                  return (
+                    <DropdownMenuItem
+                      key={project.id}
+                      onClick={() => router.push(`/projects/${project.id}`)}
+                    >
+                      {projectSite ? (
+                        <img
+                          src={getProjectFaviconUrl(projectSite.hostname, 32)}
+                          alt=""
+                          width={16}
+                          height={16}
+                          className="mr-2 size-4 shrink-0 rounded-sm"
+                        />
+                      ) : (
+                        <FolderKanban className="mr-2 size-4 shrink-0" />
+                      )}
+                      <span className="truncate">
+                        {projectSite?.hostname ?? project.name}
+                      </span>
+                      {project.id === selectedProject?.id && (
+                        <Check className="ml-auto size-4 shrink-0" />
+                      )}
+                    </DropdownMenuItem>
+                  );
+                })}
                 {projects.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuItem
-                  onClick={() => router.push("/dashboard")}
-                >
+                <DropdownMenuItem onClick={() => router.push("/dashboard")}>
                   <Plus className="mr-2 size-4 shrink-0" />
                   <span>Manage projects</span>
                 </DropdownMenuItem>
@@ -230,9 +235,7 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
                 >
                   <SidebarMenuItem>
                     <CollapsibleTrigger
-                      render={
-                        <SidebarMenuButton tooltip="Documentation" />
-                      }
+                      render={<SidebarMenuButton tooltip="Documentation" />}
                     >
                       <BookOpen className="size-4" />
                       <span>Documentation</span>
@@ -247,7 +250,10 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
                                 href={`/projects/${selectedProject.id}/published/events`}
                               />
                             }
-                            isActive={pathname === `/projects/${selectedProject.id}/published/events`}
+                            isActive={
+                              pathname ===
+                              `/projects/${selectedProject.id}/published/events`
+                            }
                           >
                             Events
                           </SidebarMenuSubButton>
@@ -259,7 +265,10 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
                                 href={`/projects/${selectedProject.id}/published/parameters`}
                               />
                             }
-                            isActive={pathname === `/projects/${selectedProject.id}/published/parameters`}
+                            isActive={
+                              pathname ===
+                              `/projects/${selectedProject.id}/published/parameters`
+                            }
                           >
                             Parameters
                           </SidebarMenuSubButton>

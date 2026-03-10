@@ -8,6 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FolderKanban } from "lucide-react";
+import { getProjectFaviconUrl, parseProjectUrl } from "@/lib/project-url";
 import { getProjects } from "./actions";
 import { CreateProjectDialog } from "./create-project-dialog";
 import { EditProjectDialog } from "./edit-project-dialog";
@@ -15,6 +16,10 @@ import { DeleteProjectDialog } from "./delete-project-dialog";
 
 export default async function ProjectsPage() {
   const projects = await getProjects();
+  const projectRows = projects.map((project) => ({
+    project,
+    projectSite: parseProjectUrl(project.url),
+  }));
 
   return (
     <div className="space-y-6">
@@ -51,13 +56,16 @@ export default async function ProjectsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {projects.map((project) => (
+              {projectRows.map(({ project, projectSite }) => (
                 <TableRow key={project.id}>
                   <TableCell>
-                    <Link href={`/projects/${project.id}`} className="flex items-center gap-3">
-                      {project.url ? (
+                    <Link
+                      href={`/projects/${project.id}`}
+                      className="flex items-center gap-3"
+                    >
+                      {projectSite ? (
                         <img
-                          src={`https://www.google.com/s2/favicons?domain=${new URL(project.url).hostname}&sz=32`}
+                          src={getProjectFaviconUrl(projectSite.hostname, 32)}
                           alt=""
                           width={20}
                           height={20}
@@ -67,7 +75,9 @@ export default async function ProjectsPage() {
                         <FolderKanban className="size-5 shrink-0 text-muted-foreground" />
                       )}
                       <div>
-                        <div className="font-medium hover:underline">{project.name}</div>
+                        <div className="font-medium hover:underline">
+                          {project.name}
+                        </div>
                         {project.description && (
                           <div className="text-xs text-muted-foreground">
                             {project.description}

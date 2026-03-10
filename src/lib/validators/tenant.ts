@@ -6,6 +6,17 @@ const slug = z
   .max(50)
   .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens");
 
+export const projectUrlSchema = z
+  .string()
+  .trim()
+  .min(1, "URL is required")
+  .url("URL must be valid")
+  .refine((value) => {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  }, "URL must start with http:// or https://")
+  .transform((value) => new URL(value).toString());
+
 export const createAccountSchema = z.object({
   name: z.string().min(1).max(100),
   slug,
@@ -22,7 +33,7 @@ export const createProjectSchema = z.object({
   name: z.string().min(1).max(100),
   slug,
   description: z.string().max(500).optional(),
-  url: z.string().url().optional(),
+  url: projectUrlSchema,
 });
 
 export const addAccountMemberSchema = z.object({

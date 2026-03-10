@@ -96,6 +96,7 @@ export function CreateProjectDialog() {
               placeholder="https://example.com"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
+              required
             />
           </div>
 
@@ -110,7 +111,10 @@ export function CreateProjectDialog() {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={!name.trim() || isPending}>
+            <Button
+              type="submit"
+              disabled={!name.trim() || !url.trim() || isPending}
+            >
               {isPending ? "Creating..." : "Create project"}
             </Button>
           </div>
