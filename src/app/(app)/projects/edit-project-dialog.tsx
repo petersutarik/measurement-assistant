@@ -90,6 +90,7 @@ export function EditProjectDialog({ project }: { project: Project }) {
               placeholder="https://example.com"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
+              required
             />
           </div>
 
@@ -104,7 +105,10 @@ export function EditProjectDialog({ project }: { project: Project }) {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={!name.trim() || isPending}>
+            <Button
+              type="submit"
+              disabled={!name.trim() || !url.trim() || isPending}
+            >
               {isPending ? "Saving..." : "Save changes"}
             </Button>
           </div>
