@@ -1,9 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, and, max, sql } from "drizzle-orm";
+import { eq, and, max, sql, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { specVersions, events, parameters, projects } from "@/lib/db/schema";
+import {
+  specVersions,
+  events,
+  parameters,
+  projects,
+  customFieldDefinitions,
+  customFieldValues,
+} from "@/lib/db/schema";
 import { createEventSchema } from "@/lib/validators/spec";
 import { requireUserContext } from "@/lib/auth/user-context";
 import type { Event } from "@/types";
@@ -97,6 +104,77 @@ export async function getEventsWithParams(
   }));
 }
 
+export async function getWorkspaceParameters(
+  projectId: string,
+  workspaceId: string
+) {
+  await requireWorkspace(projectId, workspaceId);
+
+  const allEvents = await db
+    .select({ id: events.id, name: events.name })
+    .from(events)
+    .where(eq(events.specVersionId, workspaceId));
+
+  if (allEvents.length === 0) return [];
+
+  const eventIds = allEvents.map((e) => e.id);
+  const eventNameById = new Map(allEvents.map((e) => [e.id, e.name]));
+
+  const allParams = await db
+    .select({
+      id: parameters.id,
+      eventId: parameters.eventId,
+      sourceParameterId: parameters.sourceParameterId,
+      name: parameters.name,
+      type: parameters.type,
+      description: parameters.description,
+      isRequired: parameters.isRequired,
+      exampleValue: parameters.exampleValue,
+    })
+    .from(parameters)
+    .where(inArray(parameters.eventId, eventIds))
+    .orderBy(parameters.name);
+
+  // Group by sourceParameterId to deduplicate across events
+  const grouped = new Map<
+    string,
+    {
+      name: string;
+      type: string;
+      description: string | null;
+      isRequired: boolean;
+      exampleValue: string | null;
+      events: string[];
+    }
+  >();
+
+  for (const param of allParams) {
+    const key = param.sourceParameterId ?? param.id;
+    const existing = grouped.get(key);
+    const eventName = eventNameById.get(param.eventId) ?? "Unknown";
+    if (existing) {
+      if (!existing.events.includes(eventName)) {
+        existing.events.push(eventName);
+      }
+      if (param.isRequired) existing.isRequired = true;
+    } else {
+      grouped.set(key, {
+        name: param.name,
+        type: param.type,
+        description: param.description,
+        isRequired: param.isRequired,
+        exampleValue: param.exampleValue,
+        events: [eventName],
+      });
+    }
+  }
+
+  return Array.from(grouped.entries()).map(([id, data]) => ({
+    id,
+    ...data,
+  }));
+}
+
 export async function getEvents(
   projectId: string,
   workspaceId: string
@@ -140,7 +218,7 @@ export async function createEvent(
     .where(eq(events.specVersionId, workspaceId));
   const sortOrder = (maxSort?.max ?? -1) + 1;
 
-  await db.insert(events).values({
+  const [created] = await db.insert(events).values({
     specVersionId: workspaceId,
     name,
     description: description ?? null,
@@ -149,9 +227,11 @@ export async function createEvent(
     category: category ?? null,
     implementationNotes: implementationNotes ?? null,
     sortOrder,
-  });
+  }).returning({ id: events.id });
 
   revalidateWorkspace(projectId, workspaceId);
+
+  return created.id;
 }
 
 export async function updateEvent(
@@ -254,6 +334,101 @@ export async function deleteEvent(
   if (!existing) throw new Error("Event not found");
 
   await db.delete(events).where(eq(events.id, eventId));
+
+  revalidateWorkspace(projectId, workspaceId);
+}
+
+export async function getCustomFieldsForWorkspace(
+  projectId: string,
+  workspaceId: string
+) {
+  const { project } = await requireWorkspace(projectId, workspaceId);
+
+  const definitions = await db
+    .select()
+    .from(customFieldDefinitions)
+    .where(
+      and(
+        eq(customFieldDefinitions.scopeType, "project"),
+        eq(customFieldDefinitions.scopeId, project.id)
+      )
+    )
+    .orderBy(customFieldDefinitions.sortOrder);
+
+  if (definitions.length === 0) return { definitions, values: [] };
+
+  // Get all event IDs in this workspace
+  const workspaceEvents = await db
+    .select({ id: events.id })
+    .from(events)
+    .where(eq(events.specVersionId, workspaceId));
+
+  const eventIds = workspaceEvents.map((e) => e.id);
+  if (eventIds.length === 0) return { definitions, values: [] };
+
+  // Get all parameter IDs for these events
+  const workspaceParams = await db
+    .select({ id: parameters.id })
+    .from(parameters)
+    .where(inArray(parameters.eventId, eventIds));
+
+  const paramIds = workspaceParams.map((p) => p.id);
+
+  // Get custom field values for both events and parameters
+  const defIds = definitions.map((d) => d.id);
+  const values = await db
+    .select()
+    .from(customFieldValues)
+    .where(
+      and(
+        inArray(customFieldValues.customFieldDefinitionId, defIds),
+        sql`(${customFieldValues.eventId} IN (${sql.join(eventIds.map((id) => sql`${id}`), sql`, `)})${paramIds.length > 0 ? sql` OR ${customFieldValues.parameterId} IN (${sql.join(paramIds.map((id) => sql`${id}`), sql`, `)})` : sql``})`
+      )
+    );
+
+  return { definitions, values };
+}
+
+export async function upsertCustomFieldValue(
+  projectId: string,
+  workspaceId: string,
+  definitionId: string,
+  entityId: string,
+  entityType: "event" | "parameter",
+  value: unknown
+) {
+  await requireWorkspace(projectId, workspaceId);
+
+  const eventId = entityType === "event" ? entityId : null;
+  const parameterId = entityType === "parameter" ? entityId : null;
+
+  // Check if value already exists
+  const conditions = [eq(customFieldValues.customFieldDefinitionId, definitionId)];
+  if (eventId) {
+    conditions.push(eq(customFieldValues.eventId, eventId));
+  } else {
+    conditions.push(eq(customFieldValues.parameterId, parameterId!));
+  }
+
+  const [existing] = await db
+    .select({ id: customFieldValues.id })
+    .from(customFieldValues)
+    .where(and(...conditions))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(customFieldValues)
+      .set({ value: value as Record<string, unknown> | null })
+      .where(eq(customFieldValues.id, existing.id));
+  } else {
+    await db.insert(customFieldValues).values({
+      customFieldDefinitionId: definitionId,
+      eventId,
+      parameterId,
+      value: value as Record<string, unknown> | null,
+    });
+  }
 
   revalidateWorkspace(projectId, workspaceId);
 }

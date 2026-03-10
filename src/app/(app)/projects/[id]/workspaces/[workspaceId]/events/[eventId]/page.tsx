@@ -1,15 +1,22 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { requireUserContext } from "@/lib/auth/user-context";
 import { db } from "@/lib/db";
-import { projects, specVersions, events } from "@/lib/db/schema";
+import {
+  projects,
+  specVersions,
+  events,
+  customFieldDefinitions,
+  customFieldValues,
+} from "@/lib/db/schema";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getParameters } from "./actions";
 import { CreateParameterDialog } from "./create-parameter-dialog";
 import { ParameterTree } from "./parameter-tree";
 import { DataLayerSnippet } from "./datalayer-snippet";
+import { EventCustomFields } from "./event-custom-fields";
 
 export default async function EventDetailPage({
   params,
@@ -49,7 +56,30 @@ export default async function EventDetailPage({
     .limit(1);
   if (!event) notFound();
 
-  const parameters = await getParameters(projectId, workspaceId, eventId);
+  const [parameters, cfDefs, cfVals] = await Promise.all([
+    getParameters(projectId, workspaceId, eventId),
+    db
+      .select()
+      .from(customFieldDefinitions)
+      .where(
+        and(
+          eq(customFieldDefinitions.scopeType, "project"),
+          eq(customFieldDefinitions.scopeId, project.id),
+          eq(customFieldDefinitions.entityType, "event")
+        )
+      )
+      .orderBy(customFieldDefinitions.sortOrder),
+    db
+      .select()
+      .from(customFieldValues)
+      .where(eq(customFieldValues.eventId, eventId)),
+  ]);
+
+  // Build value map: definitionId → value
+  const cfValueMap = new Map<string, unknown>();
+  for (const v of cfVals) {
+    cfValueMap.set(v.customFieldDefinitionId, v.value);
+  }
 
   return (
     <div className="space-y-6">
@@ -119,6 +149,16 @@ export default async function EventDetailPage({
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {cfDefs.length > 0 && (
+        <EventCustomFields
+          projectId={projectId}
+          workspaceId={workspaceId}
+          eventId={eventId}
+          definitions={cfDefs}
+          valueMap={cfValueMap}
+        />
       )}
 
       <DataLayerSnippet eventName={event.name} parameters={parameters} />

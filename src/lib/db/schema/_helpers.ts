@@ -70,6 +70,11 @@ export const customFieldTypeEnum = pgEnum("custom_field_type", [
   "date",
 ]);
 
+export const customFieldEntityTypeEnum = pgEnum("custom_field_entity_type", [
+  "event",
+  "parameter",
+]);
+
 // Share links
 export const shareLinkPermissionEnum = pgEnum("share_link_permission", [
   "view",

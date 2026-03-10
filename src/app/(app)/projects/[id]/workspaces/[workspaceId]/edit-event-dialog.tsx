@@ -12,8 +12,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { updateEvent } from "./actions";
-import type { Event } from "@/types";
+import { CustomFieldCell } from "@/components/custom-field-cell";
+import { updateEvent, upsertCustomFieldValue } from "./actions";
+import type { Event, CustomFieldDefinition } from "@/types";
 
 export function EditEventDialog({
   projectId,
@@ -21,12 +22,16 @@ export function EditEventDialog({
   event,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
+  customFieldDefinitions: cfDefs = [],
+  customFieldValues: cfValueMap,
 }: {
   projectId: string;
   workspaceId: string;
   event: Event;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  customFieldDefinitions?: CustomFieldDefinition[];
+  customFieldValues?: Map<string, unknown>;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
@@ -123,6 +128,35 @@ export function EditEventDialog({
               onChange={(e) => setImplementationNotes(e.target.value)}
             />
           </div>
+
+          {cfDefs.filter((d) => d.entityType === "event").length > 0 && (
+            <div className="space-y-3 border-t pt-4">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Custom fields
+              </p>
+              {cfDefs
+                .filter((d) => d.entityType === "event")
+                .map((def) => (
+                  <div key={def.id} className="space-y-1">
+                    <Label className="text-sm">{def.name}</Label>
+                    <CustomFieldCell
+                      definition={def}
+                      value={cfValueMap?.get(def.id) ?? null}
+                      onSave={async (_definitionId, value) => {
+                        await upsertCustomFieldValue(
+                          projectId,
+                          workspaceId,
+                          def.id,
+                          event.id,
+                          "event",
+                          value
+                        );
+                      }}
+                    />
+                  </div>
+                ))}
+            </div>
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

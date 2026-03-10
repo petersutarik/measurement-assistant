@@ -1,4 +1,10 @@
+import { inArray } from "drizzle-orm";
 import { Card, CardContent } from "@/components/ui/card";
+import { db } from "@/lib/db";
+import {
+  customFieldDefinitions,
+  customFieldValues,
+} from "@/lib/db/schema";
 import { getPublishedEventsWithParams } from "../../actions";
 import { EventsTable } from "../../workspaces/[workspaceId]/events-table";
 
@@ -10,10 +16,7 @@ export default async function PublishedEventsPage({
   const { id: projectId } = await params;
 
   const result = await getPublishedEventsWithParams(projectId);
-
-  if (!result) {
-    return null; // Layout handles the empty state
-  }
+  if (!result) return null;
 
   const { specVersion, rows } = result;
 
@@ -29,12 +32,35 @@ export default async function PublishedEventsPage({
     );
   }
 
+  // Fetch custom field values that exist in this published version's events
+  const eventIds = rows.map((r) => r.event.id);
+  const cfVals =
+    eventIds.length > 0
+      ? await db
+          .select()
+          .from(customFieldValues)
+          .where(inArray(customFieldValues.eventId, eventIds))
+      : [];
+
+  // Only show definitions that have values in the published version
+  const defIdsWithValues = [...new Set(cfVals.map((v) => v.customFieldDefinitionId))];
+  const cfDefs =
+    defIdsWithValues.length > 0
+      ? await db
+          .select()
+          .from(customFieldDefinitions)
+          .where(inArray(customFieldDefinitions.id, defIdsWithValues))
+          .orderBy(customFieldDefinitions.sortOrder)
+      : [];
+
   return (
     <EventsTable
       projectId={projectId}
       workspaceId={specVersion.id}
       rows={rows}
       readOnly
+      customFieldDefinitions={cfDefs}
+      customFieldValues={cfVals}
     />
   );
 }

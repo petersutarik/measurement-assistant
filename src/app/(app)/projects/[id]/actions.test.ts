@@ -85,6 +85,7 @@ vi.mock("@/lib/db/schema", () => ({
   },
   events: { id: "id", specVersionId: "svId" },
   parameters: { id: "id", eventId: "eId", parentId: "pId" },
+  customFieldValues: { eventId: "eId", parameterId: "pId", customFieldDefinitionId: "cfdId" },
 }));
 
 const mockRequireUserContext = vi.fn();
@@ -264,6 +265,11 @@ describe("workspace actions", () => {
       // Insert param 2 returning
       queryResults.push([{ id: "new-param-2" }]);
       // Update parentId on param-2 (has parentId)
+      queryResults.push(undefined);
+      // Clone custom field values for events
+      queryResults.push([]);
+      // Clone custom field values for parameters
+      queryResults.push([]);
 
       await publishWorkspace("proj-1", "ws-1", publishFormData());
       // Events and parameters were inserted

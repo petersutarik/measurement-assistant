@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { eq, and, count, desc, max, inArray, ne } from "drizzle-orm";
-import type { PgTransaction } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
 import { specVersions, events, parameters } from "@/lib/db/schema";
 import { createWorkspaceSchema } from "@/lib/validators/spec";
@@ -14,6 +13,7 @@ import {
   type ConflictSummary,
   type VersionData,
 } from "@/lib/conflicts/diff";
+import { cloneSpecData } from "@/lib/api/clone";
 
 /** Verify project belongs to user's org, return project */
 async function requireProject(projectId: string) {
@@ -27,83 +27,6 @@ async function requireProject(projectId: string) {
     .limit(1);
   if (!project) throw new Error("Project not found");
   return { project, organization, user };
-}
-
-/**
- * Clone events and parameters from one spec version to another.
- * Handles parentId remapping for nested parameters in a two-pass approach.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function cloneSpecData(tx: PgTransaction<any, any, any>, sourceId: string, targetId: string) {
-  const sourceEvents = await tx
-    .select()
-    .from(events)
-    .where(eq(events.specVersionId, sourceId));
-
-  if (sourceEvents.length === 0) return;
-
-  // Clone events and build old→new ID map
-  const eventIdMap = new Map<string, string>();
-  for (const evt of sourceEvents) {
-    const [inserted] = await tx
-      .insert(events)
-      .values({
-        specVersionId: targetId,
-        name: evt.name,
-        description: evt.description,
-        trigger: evt.trigger,
-        pagePattern: evt.pagePattern,
-        exampleUrls: evt.exampleUrls,
-        category: evt.category,
-        implementationNotes: evt.implementationNotes,
-        sortOrder: evt.sortOrder,
-        sourceEventId: evt.sourceEventId ?? evt.id,
-      })
-      .returning({ id: events.id });
-    eventIdMap.set(evt.id, inserted.id);
-  }
-
-  // Collect all parameters for source events
-  const sourceEventIds = sourceEvents.map((e) => e.id);
-  const sourceParams = await tx
-    .select()
-    .from(parameters)
-    .where(inArray(parameters.eventId, sourceEventIds));
-
-  if (sourceParams.length === 0) return;
-
-  // Insert parameters with remapped eventId and null parentId initially
-  const paramIdMap = new Map<string, string>();
-  for (const param of sourceParams) {
-    const [inserted] = await tx
-      .insert(parameters)
-      .values({
-        eventId: eventIdMap.get(param.eventId)!,
-        parentId: null,
-        name: param.name,
-        type: param.type,
-        description: param.description,
-        isRequired: param.isRequired,
-        exampleValue: param.exampleValue,
-        origin: param.origin,
-        sortOrder: param.sortOrder,
-        sourceParameterId: param.sourceParameterId ?? param.id,
-      })
-      .returning({ id: parameters.id });
-    paramIdMap.set(param.id, inserted.id);
-  }
-
-  // Second pass: remap parentId on cloned parameters
-  for (const param of sourceParams) {
-    if (param.parentId) {
-      const newParamId = paramIdMap.get(param.id)!;
-      const newParentId = paramIdMap.get(param.parentId)!;
-      await tx
-        .update(parameters)
-        .set({ parentId: newParentId })
-        .where(eq(parameters.id, newParamId));
-    }
-  }
 }
 
 /** Returns the latest published spec version for a project, or null. */
@@ -146,6 +69,8 @@ export async function getPublishedEventsWithParams(projectId: string) {
             type: parameters.type,
             isRequired: parameters.isRequired,
             exampleValue: parameters.exampleValue,
+            description: parameters.description,
+            origin: parameters.origin,
           })
           .from(parameters)
           .where(inArray(parameters.eventId, eventIds))

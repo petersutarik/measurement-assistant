@@ -251,8 +251,8 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
                               />
                             }
                             isActive={
-                              pathname ===
-                              `/projects/${selectedProject.id}/published/events`
+                              pathname === `/projects/${selectedProject.id}/published/events` ||
+                              pathname.startsWith(`/projects/${selectedProject.id}/published/events/`)
                             }
                           >
                             Events
@@ -266,8 +266,8 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
                               />
                             }
                             isActive={
-                              pathname ===
-                              `/projects/${selectedProject.id}/published/parameters`
+                              pathname === `/projects/${selectedProject.id}/published/parameters` ||
+                              pathname.startsWith(`/projects/${selectedProject.id}/published/parameters/`)
                             }
                           >
                             Parameters
@@ -277,6 +277,22 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
                     </CollapsibleContent>
                   </SidebarMenuItem>
                 </Collapsible>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    render={
+                      <Link
+                        href={`/projects/${selectedProject.id}/settings`}
+                      />
+                    }
+                    isActive={pathname.startsWith(
+                      `/projects/${selectedProject.id}/settings`
+                    )}
+                    tooltip="Project Settings"
+                  >
+                    <Settings className="size-4" />
+                    <span>Settings</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

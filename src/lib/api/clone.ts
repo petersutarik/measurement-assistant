@@ -1,9 +1,9 @@
 import { eq, inArray } from "drizzle-orm";
-import { events, parameters } from "@/lib/db/schema";
+import { events, parameters, customFieldValues } from "@/lib/db/schema";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 /**
- * Clone events and parameters from one spec version to another.
+ * Clone events, parameters, and custom field values from one spec version to another.
  * Handles parentId remapping for nested parameters in a two-pass approach.
  *
  * Accepts any Drizzle db instance (connection or transaction).
@@ -45,38 +45,71 @@ export async function cloneSpecData(db: NodePgDatabase<any>, sourceId: string, t
     .from(parameters)
     .where(inArray(parameters.eventId, sourceEventIds));
 
-  if (sourceParams.length === 0) return;
-
   // Insert parameters with remapped eventId and null parentId initially
   const paramIdMap = new Map<string, string>();
-  for (const param of sourceParams) {
-    const [inserted] = await db
-      .insert(parameters)
-      .values({
-        eventId: eventIdMap.get(param.eventId)!,
-        parentId: null,
-        name: param.name,
-        type: param.type,
-        description: param.description,
-        isRequired: param.isRequired,
-        exampleValue: param.exampleValue,
-        origin: param.origin,
-        sortOrder: param.sortOrder,
-        sourceParameterId: param.sourceParameterId ?? param.id,
-      })
-      .returning({ id: parameters.id });
-    paramIdMap.set(param.id, inserted.id);
+  if (sourceParams.length > 0) {
+    for (const param of sourceParams) {
+      const [inserted] = await db
+        .insert(parameters)
+        .values({
+          eventId: eventIdMap.get(param.eventId)!,
+          parentId: null,
+          name: param.name,
+          type: param.type,
+          description: param.description,
+          isRequired: param.isRequired,
+          exampleValue: param.exampleValue,
+          origin: param.origin,
+          sortOrder: param.sortOrder,
+          sourceParameterId: param.sourceParameterId ?? param.id,
+        })
+        .returning({ id: parameters.id });
+      paramIdMap.set(param.id, inserted.id);
+    }
+
+    // Second pass: remap parentId on cloned parameters
+    for (const param of sourceParams) {
+      if (param.parentId) {
+        const newParamId = paramIdMap.get(param.id)!;
+        const newParentId = paramIdMap.get(param.parentId)!;
+        await db
+          .update(parameters)
+          .set({ parentId: newParentId })
+          .where(eq(parameters.id, newParamId));
+      }
+    }
   }
 
-  // Second pass: remap parentId on cloned parameters
-  for (const param of sourceParams) {
-    if (param.parentId) {
-      const newParamId = paramIdMap.get(param.id)!;
-      const newParentId = paramIdMap.get(param.parentId)!;
-      await db
-        .update(parameters)
-        .set({ parentId: newParentId })
-        .where(eq(parameters.id, newParamId));
+  // Clone custom field values for events
+  const cfvForEvents = await db
+    .select()
+    .from(customFieldValues)
+    .where(inArray(customFieldValues.eventId, sourceEventIds));
+
+  for (const cfv of cfvForEvents) {
+    await db.insert(customFieldValues).values({
+      customFieldDefinitionId: cfv.customFieldDefinitionId,
+      eventId: eventIdMap.get(cfv.eventId!)!,
+      parameterId: null,
+      value: cfv.value,
+    });
+  }
+
+  // Clone custom field values for parameters
+  if (sourceParams.length > 0) {
+    const sourceParamIds = sourceParams.map((p) => p.id);
+    const cfvForParams = await db
+      .select()
+      .from(customFieldValues)
+      .where(inArray(customFieldValues.parameterId, sourceParamIds));
+
+    for (const cfv of cfvForParams) {
+      await db.insert(customFieldValues).values({
+        customFieldDefinitionId: cfv.customFieldDefinitionId,
+        eventId: null,
+        parameterId: paramIdMap.get(cfv.parameterId!)!,
+        value: cfv.value,
+      });
     }
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
   Columns3,
@@ -16,7 +16,6 @@ import {
   TableBody,
   TableCell,
   TableHead,
-  TableHeader,
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -31,10 +30,16 @@ import {
   DropdownMenuTrigger,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import { DraggableTableHeader } from "@/components/draggable-table-header";
+import { CustomFieldCell } from "@/components/custom-field-cell";
+import { AddColumnButton } from "@/components/add-column-button";
+import { useColumnOrder, type ColumnDef } from "@/hooks/use-column-order";
 import { EditEventDialog } from "./edit-event-dialog";
 import { DeleteEventDialog } from "./delete-event-dialog";
 import { ParamHoverCard } from "./param-hover-card";
-import type { Event } from "@/types";
+import { upsertCustomFieldValue } from "./actions";
+import { createCustomFieldDefinition } from "../../settings/actions";
+import type { Event, CustomFieldDefinition, CustomFieldValue } from "@/types";
 
 interface EventParam {
   id: string;
@@ -57,24 +62,11 @@ interface EventsTableProps {
   workspaceId: string;
   rows: EventRow[];
   readOnly?: boolean;
+  customFieldDefinitions?: CustomFieldDefinition[];
+  customFieldValues?: CustomFieldValue[];
 }
 
-type ColumnId =
-  | "name"
-  | "trigger"
-  | "category"
-  | "pagePattern"
-  | "description"
-  | "parameters"
-  | "codeExample";
-
-interface ColumnDef {
-  id: ColumnId;
-  label: string;
-  alwaysVisible?: boolean;
-}
-
-const columns: ColumnDef[] = [
+const BUILTIN_COLUMNS: ColumnDef[] = [
   { id: "name", label: "Name", alwaysVisible: true },
   { id: "trigger", label: "Trigger" },
   { id: "category", label: "Category" },
@@ -84,115 +76,99 @@ const columns: ColumnDef[] = [
   { id: "codeExample", label: "Code example" },
 ];
 
-const defaultVisibleIds: ColumnId[] = [
-  "name",
-  "trigger",
-  "category",
-  "parameters",
-];
+const DEFAULT_VISIBLE = ["name", "trigger", "category", "parameters"];
 
 const STORAGE_KEY = "events-table-prefs";
-
-type GroupByColumn = ColumnId | null;
-
-interface StoredPrefs {
-  visibleColumns: ColumnId[];
-  groupBy: GroupByColumn;
-}
-
-function loadPrefs(): { visibleColumns: Set<ColumnId>; groupBy: GroupByColumn } {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed: StoredPrefs = JSON.parse(raw);
-      return {
-        visibleColumns: new Set(parsed.visibleColumns),
-        groupBy: parsed.groupBy,
-      };
-    }
-  } catch {
-    // ignore
-  }
-  return { visibleColumns: new Set(defaultVisibleIds), groupBy: null };
-}
-
-function savePrefs(visibleColumns: Set<ColumnId>, groupBy: GroupByColumn) {
-  const prefs: StoredPrefs = {
-    visibleColumns: Array.from(visibleColumns),
-    groupBy,
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-}
 
 export function EventsTable({
   projectId,
   workspaceId,
   rows,
   readOnly = false,
+  customFieldDefinitions: cfDefs = [],
+  customFieldValues: cfValues = [],
 }: EventsTableProps) {
-  const [visibleColumns, setVisibleColumns] = useState<Set<ColumnId>>(
-    () => new Set(defaultVisibleIds)
+  // Build column list: built-in + custom fields for events
+  const eventCfDefs = useMemo(
+    () => cfDefs.filter((d) => d.entityType === "event"),
+    [cfDefs]
   );
-  const [groupBy, setGroupBy] = useState<GroupByColumn>(null);
-  const [hydrated, setHydrated] = useState(false);
 
-  // Load from localStorage after mount
-  useEffect(() => {
-    const prefs = loadPrefs();
-    setVisibleColumns(prefs.visibleColumns);
-    setGroupBy(prefs.groupBy);
-    setHydrated(true);
-  }, []);
+  const allColumns = useMemo<ColumnDef[]>(
+    () => [
+      ...BUILTIN_COLUMNS,
+      ...eventCfDefs.map((d) => ({ id: `cf_${d.id}`, label: d.name })),
+    ],
+    [eventCfDefs]
+  );
 
-  // Persist on change (skip initial hydration)
-  useEffect(() => {
-    if (hydrated) {
-      savePrefs(visibleColumns, groupBy);
+  const {
+    visibleColumns,
+    groupBy,
+    groupableColumns,
+    isVisible,
+    toggleColumn,
+    moveColumn,
+    setGroupBy,
+  } = useColumnOrder(STORAGE_KEY, allColumns, DEFAULT_VISIBLE);
+
+  // Build custom field value lookup: Map<eventId, Map<definitionId, value>>
+  const cfValueMap = useMemo(() => {
+    const map = new Map<string, Map<string, unknown>>();
+    for (const v of cfValues) {
+      if (!v.eventId) continue;
+      let inner = map.get(v.eventId);
+      if (!inner) {
+        inner = new Map();
+        map.set(v.eventId, inner);
+      }
+      inner.set(v.customFieldDefinitionId, v.value);
     }
-  }, [visibleColumns, groupBy, hydrated]);
+    return map;
+  }, [cfValues]);
 
-  const toggleColumn = useCallback(
-    (id: ColumnId) => {
-      setVisibleColumns((prev) => {
-        const next = new Set(prev);
-        if (next.has(id)) {
-          next.delete(id);
-          if (groupBy === id) setGroupBy(null);
-        } else {
-          next.add(id);
-        }
-        return next;
-      });
+  const cfDefById = useMemo(() => {
+    const map = new Map<string, CustomFieldDefinition>();
+    for (const d of eventCfDefs) {
+      map.set(d.id, d);
+    }
+    return map;
+  }, [eventCfDefs]);
+
+  const handleSaveCustomField = useCallback(
+    async (eventId: string, definitionId: string, value: unknown) => {
+      await upsertCustomFieldValue(
+        projectId,
+        workspaceId,
+        definitionId,
+        eventId,
+        "event",
+        value
+      );
     },
-    [groupBy]
+    [projectId, workspaceId]
   );
 
-  const isVisible = (id: ColumnId) => visibleColumns.has(id);
-
-  // All visible non-alwaysVisible columns can be grouped
-  const groupableColumns = columns.filter(
-    (c) => !c.alwaysVisible && visibleColumns.has(c.id)
+  const handleAddColumn = useCallback(
+    async (formData: FormData) => {
+      await createCustomFieldDefinition(projectId, formData);
+    },
+    [projectId]
   );
 
-  // Build grouped rows
   const grouped = buildGroups(rows, groupBy);
-
-  const visibleCols = columns.filter(
-    (c) => c.alwaysVisible || visibleColumns.has(c.id)
-  );
 
   return (
     <div className="space-y-2">
       {/* Toolbar */}
       <div className="flex items-center gap-2 justify-end">
-        {/* Group by */}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <Button variant="outline" size="sm" nativeButton={false}>
                 <Group className="mr-2 size-4" />
                 {groupBy
-                  ? `Grouped by ${columns.find((c) => c.id === groupBy)?.label}`
+                  ? `Grouped by ${allColumns.find((c) => c.id === groupBy)?.label}`
                   : "Group by"}
                 <ChevronDown className="ml-2 size-3" />
               </Button>
@@ -218,7 +194,6 @@ export function EventsTable({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Column visibility */}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -233,7 +208,7 @@ export function EventsTable({
             <DropdownMenuGroup>
               <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {columns
+              {allColumns
                 .filter((c) => !c.alwaysVisible)
                 .map((col) => (
                   <DropdownMenuCheckboxItem
@@ -252,24 +227,31 @@ export function EventsTable({
       {/* Table */}
       <div className="rounded-md border">
         <Table>
-          <TableHeader>
-            <TableRow>
-              {visibleCols.map((col) => (
-                <TableHead key={col.id}>{col.label}</TableHead>
-              ))}
-              {!readOnly && <TableHead className="w-[50px]" />}
-            </TableRow>
-          </TableHeader>
+          <DraggableTableHeader
+            columns={visibleColumns}
+            onReorder={moveColumn}
+            extraHeads={
+              !readOnly ? (
+                <>
+                  <TableHead className="w-[50px]" />
+                  <AddColumnButton onAdd={handleAddColumn} entityType="event" />
+                </>
+              ) : undefined
+            }
+          />
           <TableBody>
             {grouped.map((group) => (
               <GroupRows
                 key={group.key}
                 group={group}
-                visibleCols={visibleCols}
+                visibleCols={visibleColumns}
                 projectId={projectId}
                 workspaceId={workspaceId}
                 isGrouped={groupBy !== null}
                 readOnly={readOnly}
+                cfDefById={cfDefById}
+                cfValueMap={cfValueMap}
+                onSaveCustomField={handleSaveCustomField}
               />
             ))}
           </TableBody>
@@ -287,7 +269,7 @@ interface EventGroup {
   rows: EventRow[];
 }
 
-function getGroupValue(row: EventRow, col: ColumnId): string {
+function getGroupValue(row: EventRow, col: string): string {
   switch (col) {
     case "category":
       return row.event.category ?? "";
@@ -304,7 +286,7 @@ function getGroupValue(row: EventRow, col: ColumnId): string {
   }
 }
 
-function buildGroups(rows: EventRow[], groupBy: GroupByColumn): EventGroup[] {
+function buildGroups(rows: EventRow[], groupBy: string | null): EventGroup[] {
   if (!groupBy) {
     return [{ key: "__all", label: "", rows }];
   }
@@ -371,6 +353,9 @@ function GroupRows({
   workspaceId,
   isGrouped,
   readOnly,
+  cfDefById,
+  cfValueMap,
+  onSaveCustomField,
 }: {
   group: EventGroup;
   visibleCols: ColumnDef[];
@@ -378,8 +363,12 @@ function GroupRows({
   workspaceId: string;
   isGrouped: boolean;
   readOnly: boolean;
+  cfDefById: Map<string, CustomFieldDefinition>;
+  cfValueMap: Map<string, Map<string, unknown>>;
+  onSaveCustomField: (eventId: string, definitionId: string, value: unknown) => Promise<void>;
 }) {
-  const colSpan = visibleCols.length + (readOnly ? 0 : 1);
+  // +1 for actions column, +1 for add-column button (both only in edit mode)
+  const colSpan = visibleCols.length + (readOnly ? 0 : 2);
 
   return (
     <>
@@ -404,6 +393,9 @@ function GroupRows({
           projectId={projectId}
           workspaceId={workspaceId}
           readOnly={readOnly}
+          cfDefById={cfDefById}
+          cfValueMap={cfValueMap}
+          onSaveCustomField={onSaveCustomField}
         />
       ))}
     </>
@@ -416,12 +408,18 @@ function EventRowComponent({
   projectId,
   workspaceId,
   readOnly,
+  cfDefById,
+  cfValueMap,
+  onSaveCustomField,
 }: {
   row: EventRow;
   visibleCols: ColumnDef[];
   projectId: string;
   workspaceId: string;
   readOnly: boolean;
+  cfDefById: Map<string, CustomFieldDefinition>;
+  cfValueMap: Map<string, Map<string, unknown>>;
+  onSaveCustomField: (eventId: string, definitionId: string, value: unknown) => Promise<void>;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -438,6 +436,9 @@ function EventRowComponent({
             projectId={projectId}
             workspaceId={workspaceId}
             readOnly={readOnly}
+            cfDefById={cfDefById}
+            cfValueMap={cfValueMap}
+            onSaveCustomField={onSaveCustomField}
           />
         </TableCell>
       ))}
@@ -479,6 +480,8 @@ function EventRowComponent({
             event={row.event}
             open={editOpen}
             onOpenChange={setEditOpen}
+            customFieldDefinitions={Array.from(cfDefById.values())}
+            customFieldValues={cfValueMap.get(row.event.id)}
           />
           <DeleteEventDialog
             projectId={projectId}
@@ -489,6 +492,7 @@ function EventRowComponent({
           />
         </TableCell>
       )}
+      {!readOnly && <TableCell />}
     </TableRow>
   );
 }
@@ -499,13 +503,41 @@ function CellContent({
   projectId,
   workspaceId,
   readOnly,
+  cfDefById,
+  cfValueMap,
+  onSaveCustomField,
 }: {
-  col: ColumnId;
+  col: string;
   row: EventRow;
   projectId: string;
   workspaceId: string;
   readOnly: boolean;
+  cfDefById: Map<string, CustomFieldDefinition>;
+  cfValueMap: Map<string, Map<string, unknown>>;
+  onSaveCustomField: (eventId: string, definitionId: string, value: unknown) => Promise<void>;
 }) {
+  // Custom field column
+  if (col.startsWith("cf_")) {
+    const defId = col.slice(3);
+    const def = cfDefById.get(defId);
+    if (!def) return <span className="text-muted-foreground">—</span>;
+
+    const eventValues = cfValueMap.get(row.event.id);
+    const value = eventValues?.get(defId) ?? null;
+
+    return (
+      <CustomFieldCell
+        definition={def}
+        value={value}
+        readOnly={readOnly}
+        onSave={async (definitionId, newValue) => {
+          await onSaveCustomField(row.event.id, definitionId, newValue);
+        }}
+      />
+    );
+  }
+
+  // Built-in columns
   switch (col) {
     case "name":
       return (
@@ -562,5 +594,7 @@ function CellContent({
           {buildCodeExample(row.event, row.params)}
         </pre>
       );
+    default:
+      return null;
   }
 }

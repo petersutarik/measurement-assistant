@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Globe } from "lucide-react";
 import { getLatestPublished } from "../actions";
+import { PublishedTabs } from "./published-tabs";
 
 export default async function PublishedLayout({
   params,
@@ -84,6 +85,8 @@ export default async function PublishedLayout({
           </p>
         )}
       </div>
+
+      <PublishedTabs projectId={projectId} />
 
       {children}
     </div>

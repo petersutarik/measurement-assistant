@@ -14,14 +14,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus } from "lucide-react";
-import { createEvent } from "./actions";
+import { CustomFieldCell } from "@/components/custom-field-cell";
+import { createEvent, upsertCustomFieldValue } from "./actions";
+import type { CustomFieldDefinition } from "@/types";
 
 export function CreateEventDialog({
   projectId,
   workspaceId,
+  customFieldDefinitions: cfDefs = [],
 }: {
   projectId: string;
   workspaceId: string;
+  customFieldDefinitions?: CustomFieldDefinition[];
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -32,6 +36,9 @@ export function CreateEventDialog({
   const [pagePattern, setPagePattern] = useState("");
   const [category, setCategory] = useState("");
   const [implementationNotes, setImplementationNotes] = useState("");
+  const [cfValues, setCfValues] = useState<Map<string, unknown>>(new Map());
+
+  const eventCfDefs = cfDefs.filter((d) => d.entityType === "event");
 
   function resetForm() {
     setName("");
@@ -40,6 +47,7 @@ export function CreateEventDialog({
     setPagePattern("");
     setCategory("");
     setImplementationNotes("");
+    setCfValues(new Map());
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -55,7 +63,28 @@ export function CreateEventDialog({
         if (category) formData.set("category", category);
         if (implementationNotes)
           formData.set("implementationNotes", implementationNotes);
-        await createEvent(projectId, workspaceId, formData);
+        const eventId = await createEvent(projectId, workspaceId, formData);
+
+        // Save custom field values
+        const savePromises: Promise<void>[] = [];
+        for (const [defId, value] of cfValues) {
+          if (value != null && value !== "" && value !== false) {
+            savePromises.push(
+              upsertCustomFieldValue(
+                projectId,
+                workspaceId,
+                defId,
+                eventId,
+                "event",
+                value
+              )
+            );
+          }
+        }
+        if (savePromises.length > 0) {
+          await Promise.all(savePromises);
+        }
+
         setOpen(false);
         resetForm();
       } catch (e) {
@@ -140,6 +169,30 @@ export function CreateEventDialog({
               onChange={(e) => setImplementationNotes(e.target.value)}
             />
           </div>
+
+          {eventCfDefs.length > 0 && (
+            <div className="space-y-3 border-t pt-4">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Custom fields
+              </p>
+              {eventCfDefs.map((def) => (
+                <div key={def.id} className="space-y-1">
+                  <Label className="text-sm">{def.name}</Label>
+                  <CustomFieldCell
+                    definition={def}
+                    value={cfValues.get(def.id) ?? null}
+                    onSave={async (_definitionId, value) => {
+                      setCfValues((prev) => {
+                        const next = new Map(prev);
+                        next.set(def.id, value);
+                        return next;
+                      });
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

@@ -1,4 +1,10 @@
+import { inArray } from "drizzle-orm";
 import { Card, CardContent } from "@/components/ui/card";
+import { db } from "@/lib/db";
+import {
+  customFieldDefinitions,
+  customFieldValues,
+} from "@/lib/db/schema";
 import { getPublishedParameters } from "../../actions";
 import { ParametersTable } from "./parameters-table";
 
@@ -27,5 +33,32 @@ export default async function PublishedParametersPage({
     );
   }
 
-  return <ParametersTable rows={result.rows} />;
+  // Fetch custom field values that exist for published parameters
+  const paramIds = result.rows.map((r) => r.id);
+  const cfVals =
+    paramIds.length > 0
+      ? await db
+          .select()
+          .from(customFieldValues)
+          .where(inArray(customFieldValues.parameterId, paramIds))
+      : [];
+
+  // Only show definitions that have values in the published version
+  const defIdsWithValues = [...new Set(cfVals.map((v) => v.customFieldDefinitionId))];
+  const cfDefs =
+    defIdsWithValues.length > 0
+      ? await db
+          .select()
+          .from(customFieldDefinitions)
+          .where(inArray(customFieldDefinitions.id, defIdsWithValues))
+          .orderBy(customFieldDefinitions.sortOrder)
+      : [];
+
+  return (
+    <ParametersTable
+      rows={result.rows}
+      customFieldDefinitions={cfDefs}
+      customFieldValues={cfVals}
+    />
+  );
 }

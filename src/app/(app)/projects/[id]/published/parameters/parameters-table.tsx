@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useMemo } from "react";
 import { Columns3, Group, ChevronDown } from "lucide-react";
 import {
   Table,
   TableBody,
   TableCell,
   TableHead,
-  TableHeader,
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +21,10 @@ import {
   DropdownMenuTrigger,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import { DraggableTableHeader } from "@/components/draggable-table-header";
+import { CustomFieldCell } from "@/components/custom-field-cell";
+import { useColumnOrder, type ColumnDef } from "@/hooks/use-column-order";
+import type { CustomFieldDefinition, CustomFieldValue } from "@/types";
 
 interface ParameterRow {
   id: string;
@@ -35,23 +38,11 @@ interface ParameterRow {
 
 interface ParametersTableProps {
   rows: ParameterRow[];
+  customFieldDefinitions?: CustomFieldDefinition[];
+  customFieldValues?: CustomFieldValue[];
 }
 
-type ColumnId =
-  | "name"
-  | "type"
-  | "required"
-  | "description"
-  | "exampleValue"
-  | "events";
-
-interface ColumnDef {
-  id: ColumnId;
-  label: string;
-  alwaysVisible?: boolean;
-}
-
-const columns: ColumnDef[] = [
+const BUILTIN_COLUMNS: ColumnDef[] = [
   { id: "name", label: "Name", alwaysVisible: true },
   { id: "type", label: "Type" },
   { id: "required", label: "Required" },
@@ -60,106 +51,74 @@ const columns: ColumnDef[] = [
   { id: "events", label: "Events" },
 ];
 
-const defaultVisibleIds: ColumnId[] = [
-  "name",
-  "type",
-  "required",
-  "events",
-];
+const DEFAULT_VISIBLE = ["name", "type", "required", "events"];
 
 const STORAGE_KEY = "params-table-prefs";
 
-type GroupByColumn = ColumnId | null;
+export function ParametersTable({
+  rows,
+  customFieldDefinitions: cfDefs = [],
+  customFieldValues: cfValues = [],
+}: ParametersTableProps) {
+  const paramCfDefs = useMemo(
+    () => cfDefs.filter((d) => d.entityType === "parameter"),
+    [cfDefs]
+  );
 
-interface StoredPrefs {
-  visibleColumns: ColumnId[];
-  groupBy: GroupByColumn;
-}
+  const allColumns = useMemo<ColumnDef[]>(
+    () => [
+      ...BUILTIN_COLUMNS,
+      ...paramCfDefs.map((d) => ({ id: `cf_${d.id}`, label: d.name })),
+    ],
+    [paramCfDefs]
+  );
 
-function loadPrefs(): { visibleColumns: Set<ColumnId>; groupBy: GroupByColumn } {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed: StoredPrefs = JSON.parse(raw);
-      return {
-        visibleColumns: new Set(parsed.visibleColumns),
-        groupBy: parsed.groupBy,
-      };
-    }
-  } catch {
-    // ignore
-  }
-  return { visibleColumns: new Set(defaultVisibleIds), groupBy: null };
-}
-
-function savePrefs(visibleColumns: Set<ColumnId>, groupBy: GroupByColumn) {
-  const prefs: StoredPrefs = {
-    visibleColumns: Array.from(visibleColumns),
+  const {
+    visibleColumns,
     groupBy,
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-}
+    groupableColumns,
+    isVisible,
+    toggleColumn,
+    moveColumn,
+    setGroupBy,
+  } = useColumnOrder(STORAGE_KEY, allColumns, DEFAULT_VISIBLE);
 
-export function ParametersTable({ rows }: ParametersTableProps) {
-  const [visibleColumns, setVisibleColumns] = useState<Set<ColumnId>>(
-    () => new Set(defaultVisibleIds)
-  );
-  const [groupBy, setGroupBy] = useState<GroupByColumn>(null);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    const prefs = loadPrefs();
-    setVisibleColumns(prefs.visibleColumns);
-    setGroupBy(prefs.groupBy);
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (hydrated) {
-      savePrefs(visibleColumns, groupBy);
+  // Build custom field value lookup: Map<parameterId, Map<definitionId, value>>
+  const cfValueMap = useMemo(() => {
+    const map = new Map<string, Map<string, unknown>>();
+    for (const v of cfValues) {
+      if (!v.parameterId) continue;
+      let inner = map.get(v.parameterId);
+      if (!inner) {
+        inner = new Map();
+        map.set(v.parameterId, inner);
+      }
+      inner.set(v.customFieldDefinitionId, v.value);
     }
-  }, [visibleColumns, groupBy, hydrated]);
+    return map;
+  }, [cfValues]);
 
-  const toggleColumn = useCallback(
-    (id: ColumnId) => {
-      setVisibleColumns((prev) => {
-        const next = new Set(prev);
-        if (next.has(id)) {
-          next.delete(id);
-          if (groupBy === id) setGroupBy(null);
-        } else {
-          next.add(id);
-        }
-        return next;
-      });
-    },
-    [groupBy]
-  );
-
-  const isVisible = (id: ColumnId) => visibleColumns.has(id);
-
-  const groupableColumns = columns.filter(
-    (c) => !c.alwaysVisible && visibleColumns.has(c.id)
-  );
+  const cfDefById = useMemo(() => {
+    const map = new Map<string, CustomFieldDefinition>();
+    for (const d of paramCfDefs) {
+      map.set(d.id, d);
+    }
+    return map;
+  }, [paramCfDefs]);
 
   const grouped = buildGroups(rows, groupBy);
-
-  const visibleCols = columns.filter(
-    (c) => c.alwaysVisible || visibleColumns.has(c.id)
-  );
 
   return (
     <div className="space-y-2">
       {/* Toolbar */}
       <div className="flex items-center gap-2 justify-end">
-        {/* Group by */}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <Button variant="outline" size="sm" nativeButton={false}>
                 <Group className="mr-2 size-4" />
                 {groupBy
-                  ? `Grouped by ${columns.find((c) => c.id === groupBy)?.label}`
+                  ? `Grouped by ${allColumns.find((c) => c.id === groupBy)?.label}`
                   : "Group by"}
                 <ChevronDown className="ml-2 size-3" />
               </Button>
@@ -185,7 +144,6 @@ export function ParametersTable({ rows }: ParametersTableProps) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Column visibility */}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -200,7 +158,7 @@ export function ParametersTable({ rows }: ParametersTableProps) {
             <DropdownMenuGroup>
               <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {columns
+              {allColumns
                 .filter((c) => !c.alwaysVisible)
                 .map((col) => (
                   <DropdownMenuCheckboxItem
@@ -219,20 +177,19 @@ export function ParametersTable({ rows }: ParametersTableProps) {
       {/* Table */}
       <div className="rounded-md border">
         <Table>
-          <TableHeader>
-            <TableRow>
-              {visibleCols.map((col) => (
-                <TableHead key={col.id}>{col.label}</TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
+          <DraggableTableHeader
+            columns={visibleColumns}
+            onReorder={moveColumn}
+          />
           <TableBody>
             {grouped.map((group) => (
               <GroupRows
                 key={group.key}
                 group={group}
-                visibleCols={visibleCols}
+                visibleCols={visibleColumns}
                 isGrouped={groupBy !== null}
+                cfDefById={cfDefById}
+                cfValueMap={cfValueMap}
               />
             ))}
           </TableBody>
@@ -250,7 +207,7 @@ interface ParamGroup {
   rows: ParameterRow[];
 }
 
-function getGroupValue(row: ParameterRow, col: ColumnId): string {
+function getGroupValue(row: ParameterRow, col: string): string {
   switch (col) {
     case "type":
       return row.type;
@@ -269,7 +226,7 @@ function getGroupValue(row: ParameterRow, col: ColumnId): string {
 
 function buildGroups(
   rows: ParameterRow[],
-  groupBy: GroupByColumn
+  groupBy: string | null
 ): ParamGroup[] {
   if (!groupBy) {
     return [{ key: "__all", label: "", rows }];
@@ -299,10 +256,14 @@ function GroupRows({
   group,
   visibleCols,
   isGrouped,
+  cfDefById,
+  cfValueMap,
 }: {
   group: ParamGroup;
   visibleCols: ColumnDef[];
   isGrouped: boolean;
+  cfDefById: Map<string, CustomFieldDefinition>;
+  cfValueMap: Map<string, Map<string, unknown>>;
 }) {
   return (
     <>
@@ -323,7 +284,12 @@ function GroupRows({
         <TableRow key={row.id}>
           {visibleCols.map((col) => (
             <TableCell key={col.id}>
-              <CellContent col={col.id} row={row} />
+              <CellContent
+                col={col.id}
+                row={row}
+                cfDefById={cfDefById}
+                cfValueMap={cfValueMap}
+              />
             </TableCell>
           ))}
         </TableRow>
@@ -335,10 +301,33 @@ function GroupRows({
 function CellContent({
   col,
   row,
+  cfDefById,
+  cfValueMap,
 }: {
-  col: ColumnId;
+  col: string;
   row: ParameterRow;
+  cfDefById: Map<string, CustomFieldDefinition>;
+  cfValueMap: Map<string, Map<string, unknown>>;
 }) {
+  // Custom field column (read-only in published view)
+  if (col.startsWith("cf_")) {
+    const defId = col.slice(3);
+    const def = cfDefById.get(defId);
+    if (!def) return <span className="text-muted-foreground">—</span>;
+
+    const paramValues = cfValueMap.get(row.id);
+    const value = paramValues?.get(defId) ?? null;
+
+    return (
+      <CustomFieldCell
+        definition={def}
+        value={value}
+        readOnly
+        onSave={async () => {}}
+      />
+    );
+  }
+
   switch (col) {
     case "name":
       return <span className="font-medium font-mono">{row.name}</span>;
@@ -376,5 +365,7 @@ function CellContent({
           ))}
         </div>
       );
+    default:
+      return null;
   }
 }
