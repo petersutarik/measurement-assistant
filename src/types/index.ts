@@ -35,6 +35,9 @@ import type {
   // Comments
   comments,
   eventAttachments,
+  // Plans
+  measurementPlans,
+  planContextSources,
 } from "@/lib/db/schema";
 
 // Tenant
@@ -86,3 +89,13 @@ export type QaIssue = InferSelectModel<typeof qaIssues>;
 // Comments
 export type Comment = InferSelectModel<typeof comments>;
 export type EventAttachment = InferSelectModel<typeof eventAttachments>;
+
+// Plans
+export type MeasurementPlan = InferSelectModel<typeof measurementPlans>;
+export type PlanContextSource = InferSelectModel<typeof planContextSources>;
+
+export interface PlanMessage {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+}

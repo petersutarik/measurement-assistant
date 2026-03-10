@@ -111,3 +111,15 @@ export const mappingTypeEnum = pgEnum("mapping_type", [
   "reference",
   "static",
 ]);
+
+// Plans
+export const planStatusEnum = pgEnum("plan_status", [
+  "draft",
+  "completed",
+]);
+
+export const contextSourceTypeEnum = pgEnum("context_source_type", [
+  "note",
+  "url",
+  "file",
+]);
