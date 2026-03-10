@@ -52,6 +52,15 @@ export default async function ProjectDetailPage({
     <div className="space-y-6">
       <div>
         <div className="flex items-center gap-3">
+          {project.url && (
+            <img
+              src={`https://www.google.com/s2/favicons?domain=${new URL(project.url).hostname}&sz=64`}
+              alt=""
+              width={28}
+              height={28}
+              className="shrink-0 rounded"
+            />
+          )}
           <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
           <Badge variant="secondary">{project.slug}</Badge>
           {latestPublished && (

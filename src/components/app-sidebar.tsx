@@ -106,15 +106,27 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
                   />
                 }
               >
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-foreground">
-                  <BarChart3 className="size-4" />
-                </div>
+                {selectedProject?.url ? (
+                  <img
+                    src={`https://www.google.com/s2/favicons?domain=${new URL(selectedProject.url).hostname}&sz=32`}
+                    alt=""
+                    width={32}
+                    height={32}
+                    className="size-8 shrink-0 rounded-lg"
+                  />
+                ) : (
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-foreground">
+                    <BarChart3 className="size-4" />
+                  </div>
+                )}
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate text-sm font-semibold">
-                    {selectedProject?.name ?? "Select project"}
+                    {selectedProject?.url
+                      ? new URL(selectedProject.url).hostname
+                      : "Select project"}
                   </span>
                   <span className="truncate text-xs text-muted-foreground">
-                    Measurement Assistant
+                    {selectedProject?.name ?? "Measurement Assistant"}
                   </span>
                 </div>
                 <ChevronsUpDown className="ml-auto size-4" />
@@ -130,8 +142,22 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
                     key={project.id}
                     onClick={() => router.push(`/projects/${project.id}`)}
                   >
-                    <FolderKanban className="mr-2 size-4 shrink-0" />
-                    <span className="truncate">{project.name}</span>
+                    {project.url ? (
+                      <img
+                        src={`https://www.google.com/s2/favicons?domain=${new URL(project.url).hostname}&sz=32`}
+                        alt=""
+                        width={16}
+                        height={16}
+                        className="mr-2 size-4 shrink-0 rounded-sm"
+                      />
+                    ) : (
+                      <FolderKanban className="mr-2 size-4 shrink-0" />
+                    )}
+                    <span className="truncate">
+                      {project.url
+                        ? new URL(project.url).hostname
+                        : project.name}
+                    </span>
                     {project.id === selectedProject?.id && (
                       <Check className="ml-auto size-4 shrink-0" />
                     )}

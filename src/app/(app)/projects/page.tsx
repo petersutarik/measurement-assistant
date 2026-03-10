@@ -54,13 +54,26 @@ export default async function ProjectsPage() {
               {projects.map((project) => (
                 <TableRow key={project.id}>
                   <TableCell>
-                    <Link href={`/projects/${project.id}`} className="block">
-                      <div className="font-medium hover:underline">{project.name}</div>
-                      {project.description && (
-                        <div className="text-xs text-muted-foreground">
-                          {project.description}
-                        </div>
+                    <Link href={`/projects/${project.id}`} className="flex items-center gap-3">
+                      {project.url ? (
+                        <img
+                          src={`https://www.google.com/s2/favicons?domain=${new URL(project.url).hostname}&sz=32`}
+                          alt=""
+                          width={20}
+                          height={20}
+                          className="shrink-0 rounded"
+                        />
+                      ) : (
+                        <FolderKanban className="size-5 shrink-0 text-muted-foreground" />
                       )}
+                      <div>
+                        <div className="font-medium hover:underline">{project.name}</div>
+                        {project.description && (
+                          <div className="text-xs text-muted-foreground">
+                            {project.description}
+                          </div>
+                        )}
+                      </div>
                     </Link>
                   </TableCell>
                   <TableCell className="text-muted-foreground">

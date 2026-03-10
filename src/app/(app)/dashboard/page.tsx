@@ -75,6 +75,17 @@ export default async function DashboardPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
+                      {project.url ? (
+                        <img
+                          src={`https://www.google.com/s2/favicons?domain=${new URL(project.url).hostname}&sz=32`}
+                          alt=""
+                          width={20}
+                          height={20}
+                          className="shrink-0 rounded"
+                        />
+                      ) : (
+                        <FolderKanban className="size-5 shrink-0 text-muted-foreground" />
+                      )}
                       <Link href={`/projects/${project.id}`}>
                         <CardTitle className="text-base hover:underline">
                           {project.name}
