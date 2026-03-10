@@ -15,6 +15,13 @@
       "when": 1772970598715,
       "tag": "0001_bouncy_corsair",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773104254266,
+      "tag": "0002_moaning_union_jack",
+      "breakpoints": true
     }
   ]
 }

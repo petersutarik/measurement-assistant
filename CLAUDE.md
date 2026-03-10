@@ -68,3 +68,7 @@ supabase status      # Show local Supabase URLs and keys
 - Tests: co-locate with source as `*.test.ts`, use Vitest
 - Use `slugify()` from `src/lib/slugify.ts` for generating slugs from names
 - **Drizzle schema sync:** After any change to `src/lib/db/schema/`, run `DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres" npx drizzle-kit push` to push the schema to the local dev database
+- **API routes** go in `src/app/api/v1/` with Bearer token auth via `requireApiAuth()` from `src/lib/api/auth.ts`
+- API response helpers in `src/lib/api/response.ts` (`ok`, `created`, `notFound`, `validationError`, etc.)
+- Shared data cloning logic in `src/lib/api/clone.ts` (used by both server actions and API routes)
+- API docs: `docs/API.md`
