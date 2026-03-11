@@ -1,5 +1,6 @@
 import { inArray } from "drizzle-orm";
 import { Card, CardContent } from "@/components/ui/card";
+import { ScreenContextSetter } from "@/components/assistant/screen-context-setter";
 import { db } from "@/lib/db";
 import {
   customFieldDefinitions,
@@ -53,14 +54,32 @@ export default async function PublishedEventsPage({
           .orderBy(customFieldDefinitions.sortOrder)
       : [];
 
+  const contextData = rows.map((r) => ({
+    name: r.event.name,
+    trigger: r.event.trigger,
+    category: r.event.category,
+    description: r.event.description,
+    paramCount: r.params.length,
+    paramNames: r.params.map((p) => p.name),
+  }));
+
   return (
-    <EventsTable
-      projectId={projectId}
-      workspaceId={specVersion.id}
-      rows={rows}
-      readOnly
-      customFieldDefinitions={cfDefs}
-      customFieldValues={cfVals}
-    />
+    <>
+      <ScreenContextSetter
+        screen="published-events"
+        projectId={projectId}
+        view="published"
+        summary={`Published events table (v${specVersion.versionNumber}) — ${rows.length} events (read-only)`}
+        data={{ events: contextData, version: specVersion.versionNumber }}
+      />
+      <EventsTable
+        projectId={projectId}
+        workspaceId={specVersion.id}
+        rows={rows}
+        readOnly
+        customFieldDefinitions={cfDefs}
+        customFieldValues={cfVals}
+      />
+    </>
   );
 }

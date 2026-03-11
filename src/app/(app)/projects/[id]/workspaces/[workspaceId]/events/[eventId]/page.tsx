@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScreenContextSetter } from "@/components/assistant/screen-context-setter";
 import { getParameters } from "./actions";
 import { CreateParameterDialog } from "./create-parameter-dialog";
 import { ParameterTree } from "./parameter-tree";
@@ -81,8 +82,41 @@ export default async function EventDetailPage({
     cfValueMap.set(v.customFieldDefinitionId, v.value);
   }
 
+  const contextData = {
+    event: {
+      id: event.id,
+      name: event.name,
+      description: event.description,
+      trigger: event.trigger,
+      category: event.category,
+      pagePattern: event.pagePattern,
+      implementationNotes: event.implementationNotes,
+    },
+    parameters: parameters.map((p) => ({
+      id: p.id,
+      name: p.name,
+      type: p.type,
+      isRequired: p.isRequired,
+      description: p.description,
+      exampleValue: p.exampleValue,
+    })),
+    customFields: cfDefs.map((d) => ({
+      name: d.name,
+      value: cfValueMap.get(d.id),
+    })).filter((f) => f.value !== undefined),
+  };
+
   return (
     <div className="space-y-6">
+      <ScreenContextSetter
+        screen="workspace-event-detail"
+        projectId={projectId}
+        workspaceId={workspaceId}
+        eventId={eventId}
+        view="workspace"
+        summary={`Event detail: ${event.name} — ${parameters.length} parameters`}
+        data={contextData}
+      />
       <div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
           <Link href={`/projects/${projectId}`} className="hover:underline">

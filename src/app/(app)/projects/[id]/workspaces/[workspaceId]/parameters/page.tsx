@@ -1,4 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { ScreenContextSetter } from "@/components/assistant/screen-context-setter";
 import {
   getWorkspaceParameters,
   getCustomFieldsForWorkspace,
@@ -29,11 +30,29 @@ export default async function WorkspaceParametersPage({
     );
   }
 
+  const contextData = rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    type: r.type,
+    isRequired: r.isRequired,
+    events: r.events,
+  }));
+
   return (
-    <ParametersTable
-      rows={rows}
-      customFieldDefinitions={customFields.definitions}
-      customFieldValues={customFields.values}
-    />
+    <>
+      <ScreenContextSetter
+        screen="workspace-parameters"
+        projectId={projectId}
+        workspaceId={workspaceId}
+        view="workspace"
+        summary={`Workspace parameters table — ${rows.length} parameters`}
+        data={{ parameters: contextData }}
+      />
+      <ParametersTable
+        rows={rows}
+        customFieldDefinitions={customFields.definitions}
+        customFieldValues={customFields.values}
+      />
+    </>
   );
 }

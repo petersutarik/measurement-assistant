@@ -1,5 +1,6 @@
 import { inArray } from "drizzle-orm";
 import { Card, CardContent } from "@/components/ui/card";
+import { ScreenContextSetter } from "@/components/assistant/screen-context-setter";
 import { db } from "@/lib/db";
 import {
   customFieldDefinitions,
@@ -54,11 +55,27 @@ export default async function PublishedParametersPage({
           .orderBy(customFieldDefinitions.sortOrder)
       : [];
 
+  const contextData = result.rows.map((r) => ({
+    name: r.name,
+    type: r.type,
+    isRequired: r.isRequired,
+    events: r.events,
+  }));
+
   return (
-    <ParametersTable
-      rows={result.rows}
-      customFieldDefinitions={cfDefs}
-      customFieldValues={cfVals}
-    />
+    <>
+      <ScreenContextSetter
+        screen="published-parameters"
+        projectId={projectId}
+        view="published"
+        summary={`Published parameters table — ${result.rows.length} parameters (read-only)`}
+        data={{ parameters: contextData }}
+      />
+      <ParametersTable
+        rows={result.rows}
+        customFieldDefinitions={cfDefs}
+        customFieldValues={cfVals}
+      />
+    </>
   );
 }

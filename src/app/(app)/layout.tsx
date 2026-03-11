@@ -7,6 +7,8 @@ import { db } from "@/lib/db";
 import { projects } from "@/lib/db/schema";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { AssistantProvider } from "@/components/assistant/assistant-context";
+import { AssistantPanel } from "@/components/assistant/assistant-panel";
 
 export default async function AppLayout({
   children,
@@ -45,11 +47,14 @@ export default async function AppLayout({
     : [];
 
   return (
-    <SidebarProvider>
-      <AppSidebar user={{ email, name, avatarUrl }} projects={orgProjects} />
-      <SidebarInset>
-        <main className="flex-1 px-6 py-6 lg:px-8">{children}</main>
-      </SidebarInset>
-    </SidebarProvider>
+    <AssistantProvider>
+      <SidebarProvider>
+        <AppSidebar user={{ email, name, avatarUrl }} projects={orgProjects} />
+        <SidebarInset>
+          <main className="flex-1 px-6 py-6 lg:px-8">{children}</main>
+        </SidebarInset>
+      </SidebarProvider>
+      <AssistantPanel />
+    </AssistantProvider>
   );
 }

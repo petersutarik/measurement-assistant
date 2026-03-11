@@ -1,4 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { ScreenContextSetter } from "@/components/assistant/screen-context-setter";
 import { getEventsWithParams, getCustomFieldsForWorkspace } from "../actions";
 import { CreateEventDialog } from "../create-event-dialog";
 import { EventsTable } from "../events-table";
@@ -28,13 +29,32 @@ export default async function WorkspaceEventsPage({
     );
   }
 
+  const contextData = eventsWithParams.map((r) => ({
+    id: r.event.id,
+    name: r.event.name,
+    trigger: r.event.trigger,
+    category: r.event.category,
+    description: r.event.description,
+    params: r.params.map((p) => ({ id: p.id, name: p.name, type: p.type })),
+  }));
+
   return (
-    <EventsTable
-      projectId={projectId}
-      workspaceId={workspaceId}
-      rows={eventsWithParams}
-      customFieldDefinitions={customFields.definitions}
-      customFieldValues={customFields.values}
-    />
+    <>
+      <ScreenContextSetter
+        screen="workspace-events"
+        projectId={projectId}
+        workspaceId={workspaceId}
+        view="workspace"
+        summary={`Workspace events table — ${eventsWithParams.length} events`}
+        data={{ events: contextData }}
+      />
+      <EventsTable
+        projectId={projectId}
+        workspaceId={workspaceId}
+        rows={eventsWithParams}
+        customFieldDefinitions={customFields.definitions}
+        customFieldValues={customFields.values}
+      />
+    </>
   );
 }
