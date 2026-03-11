@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq, and, count, desc, max, inArray, ne } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { specVersions, events, parameters } from "@/lib/db/schema";
+import { specVersions, events, parameters, eventParameters } from "@/lib/db/schema";
 import { createWorkspaceSchema } from "@/lib/validators/spec";
 import { requireUserContext } from "@/lib/auth/user-context";
 import { projects } from "@/lib/db/schema";
@@ -103,7 +103,7 @@ export async function getPublishedEventsWithParams(
       ? await db
           .select({
             id: parameters.id,
-            eventId: parameters.eventId,
+            eventId: eventParameters.eventId,
             name: parameters.name,
             type: parameters.type,
             isRequired: parameters.isRequired,
@@ -111,9 +111,10 @@ export async function getPublishedEventsWithParams(
             description: parameters.description,
             origin: parameters.origin,
           })
-          .from(parameters)
-          .where(inArray(parameters.eventId, eventIds))
-          .orderBy(parameters.sortOrder)
+          .from(eventParameters)
+          .innerJoin(parameters, eq(parameters.id, eventParameters.parameterId))
+          .where(inArray(eventParameters.eventId, eventIds))
+          .orderBy(eventParameters.sortOrder)
       : [];
 
   const paramsByEvent = new Map<string, typeof params>();
@@ -171,11 +172,10 @@ export async function getPublishedParameters(
   const eventIds = allEvents.map((e) => e.id);
   const eventNameById = new Map(allEvents.map((e) => [e.id, e.name]));
 
+  // Parameters are workspace-level — query directly
   const allParams = await db
     .select({
       id: parameters.id,
-      eventId: parameters.eventId,
-      sourceParameterId: parameters.sourceParameterId,
       name: parameters.name,
       type: parameters.type,
       description: parameters.description,
@@ -183,49 +183,38 @@ export async function getPublishedParameters(
       exampleValue: parameters.exampleValue,
     })
     .from(parameters)
-    .where(inArray(parameters.eventId, eventIds))
+    .where(eq(parameters.specVersionId, published.id))
     .orderBy(parameters.name);
 
-  // Group by sourceParameterId (or id if null) to deduplicate across events
-  const grouped = new Map<
-    string,
-    {
-      name: string;
-      type: string;
-      description: string | null;
-      isRequired: boolean;
-      exampleValue: string | null;
-      events: string[];
-    }
-  >();
+  if (allParams.length === 0)
+    return { specVersion: published, rows: allParams.map((p) => ({ ...p, events: [] as string[] })) };
 
-  for (const param of allParams) {
-    const key = param.sourceParameterId ?? param.id;
-    const existing = grouped.get(key);
-    const eventName = eventNameById.get(param.eventId) ?? "Unknown";
+  // Get event names via junction
+  const paramIds = allParams.map((p) => p.id);
+  const junctions = await db
+    .select({
+      parameterId: eventParameters.parameterId,
+      eventName: events.name,
+    })
+    .from(eventParameters)
+    .innerJoin(events, eq(events.id, eventParameters.eventId))
+    .where(inArray(eventParameters.parameterId, paramIds));
+
+  const eventsByParam = new Map<string, string[]>();
+  for (const j of junctions) {
+    const existing = eventsByParam.get(j.parameterId);
     if (existing) {
-      if (!existing.events.includes(eventName)) {
-        existing.events.push(eventName);
-      }
-      // If any usage is required, mark as required
-      if (param.isRequired) existing.isRequired = true;
+      if (!existing.includes(j.eventName)) existing.push(j.eventName);
     } else {
-      grouped.set(key, {
-        name: param.name,
-        type: param.type,
-        description: param.description,
-        isRequired: param.isRequired,
-        exampleValue: param.exampleValue,
-        events: [eventName],
-      });
+      eventsByParam.set(j.parameterId, [j.eventName]);
     }
   }
 
   return {
     specVersion: published,
-    rows: Array.from(grouped.entries()).map(([id, data]) => ({
-      id,
-      ...data,
+    rows: allParams.map((p) => ({
+      ...p,
+      events: eventsByParam.get(p.id) ?? [],
     })),
   };
 }
@@ -455,9 +444,10 @@ export async function deleteWorkspace(projectId: string, workspaceId: string) {
   revalidatePath(`/projects/${projectId}`);
 }
 
-/** Load events + parameters for a spec version as VersionData */
+/** Load events + parameters for a spec version as VersionData.
+ *  Expands junction rows into per-event parameter entries so the diff engine works unchanged. */
 async function loadVersionData(specVersionId: string): Promise<VersionData> {
-  const [versionEvents, versionParams] = await Promise.all([
+  const [versionEvents, junctionParams] = await Promise.all([
     db
       .select({
         id: events.id,
@@ -474,7 +464,7 @@ async function loadVersionData(specVersionId: string): Promise<VersionData> {
     db
       .select({
         id: parameters.id,
-        eventId: parameters.eventId,
+        eventId: eventParameters.eventId,
         sourceParameterId: parameters.sourceParameterId,
         name: parameters.name,
         type: parameters.type,
@@ -483,18 +473,12 @@ async function loadVersionData(specVersionId: string): Promise<VersionData> {
         exampleValue: parameters.exampleValue,
         origin: parameters.origin,
       })
-      .from(parameters)
-      .where(
-        inArray(
-          parameters.eventId,
-          db
-            .select({ id: events.id })
-            .from(events)
-            .where(eq(events.specVersionId, specVersionId))
-        )
-      ),
+      .from(eventParameters)
+      .innerJoin(parameters, eq(parameters.id, eventParameters.parameterId))
+      .innerJoin(events, eq(events.id, eventParameters.eventId))
+      .where(eq(events.specVersionId, specVersionId)),
   ]);
-  return { events: versionEvents, parameters: versionParams };
+  return { events: versionEvents, parameters: junctionParams };
 }
 
 /** Returns all published spec versions for a project, ordered by version DESC. */

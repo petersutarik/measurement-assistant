@@ -26,6 +26,7 @@ function chainMock(): Record<string, unknown> {
     "from",
     "where",
     "leftJoin",
+    "innerJoin",
     "groupBy",
     "values",
     "set",
@@ -84,7 +85,8 @@ vi.mock("@/lib/db/schema", () => ({
     forkedFromId: "ffId",
   },
   events: { id: "id", specVersionId: "svId" },
-  parameters: { id: "id", eventId: "eId", parentId: "pId" },
+  parameters: { id: "id", specVersionId: "svId", parentId: "pId" },
+  eventParameters: { eventId: "eId", parameterId: "pId", sortOrder: "so" },
   customFieldValues: { eventId: "eId", parameterId: "pId", customFieldDefinitionId: "cfdId" },
 }));
 
@@ -258,7 +260,7 @@ describe("workspace actions", () => {
       queryResults.push([fakeEvent]);
       // Insert cloned event returning
       queryResults.push([{ id: "new-evt-1" }]);
-      // Select parameters for source events
+      // Select parameters (workspace-level) for source
       queryResults.push([fakeParam, fakeNestedParam]);
       // Insert param 1 returning
       queryResults.push([{ id: "new-param-1" }]);
@@ -266,6 +268,8 @@ describe("workspace actions", () => {
       queryResults.push([{ id: "new-param-2" }]);
       // Update parentId on param-2 (has parentId)
       queryResults.push(undefined);
+      // Clone junction rows (event_parameters)
+      queryResults.push([]);
       // Clone custom field values for events
       queryResults.push([]);
       // Clone custom field values for parameters

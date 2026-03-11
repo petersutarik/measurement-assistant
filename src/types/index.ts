@@ -11,6 +11,7 @@ import type {
   specVersions,
   events,
   parameters,
+  eventParameters,
   sharedSchemas,
   sharedSchemaFields,
   enums,
@@ -53,6 +54,7 @@ export type MemberAccess = InferSelectModel<typeof memberAccess>;
 export type SpecVersion = InferSelectModel<typeof specVersions>;
 export type Event = InferSelectModel<typeof events>;
 export type Parameter = InferSelectModel<typeof parameters>;
+export type EventParameter = InferSelectModel<typeof eventParameters>;
 export type SharedSchema = InferSelectModel<typeof sharedSchemas>;
 export type SharedSchemaField = InferSelectModel<typeof sharedSchemaFields>;
 export type Enum = InferSelectModel<typeof enums>;

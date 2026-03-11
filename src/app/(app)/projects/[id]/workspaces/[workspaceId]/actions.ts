@@ -7,6 +7,7 @@ import {
   specVersions,
   events,
   parameters,
+  eventParameters,
   projects,
   customFieldDefinitions,
   customFieldValues,
@@ -60,31 +61,27 @@ export async function getEventsWithParams(
     .where(eq(events.specVersionId, workspaceId))
     .orderBy(events.sortOrder);
 
-  // Fetch all params for this workspace's events in one query
   const eventIds = allEvents.map((e) => e.id);
+
+  // Fetch params via junction table
   const params =
     eventIds.length > 0
       ? await db
           .select({
             id: parameters.id,
-            eventId: parameters.eventId,
+            eventId: eventParameters.eventId,
             name: parameters.name,
             type: parameters.type,
             isRequired: parameters.isRequired,
             exampleValue: parameters.exampleValue,
             description: parameters.description,
             origin: parameters.origin,
+            sortOrder: eventParameters.sortOrder,
           })
-          .from(parameters)
-          .where(
-            eventIds.length === 1
-              ? eq(parameters.eventId, eventIds[0])
-              : sql`${parameters.eventId} IN (${sql.join(
-                  eventIds.map((id) => sql`${id}`),
-                  sql`, `
-                )})`
-          )
-          .orderBy(parameters.sortOrder)
+          .from(eventParameters)
+          .innerJoin(parameters, eq(parameters.id, eventParameters.parameterId))
+          .where(inArray(eventParameters.eventId, eventIds))
+          .orderBy(eventParameters.sortOrder)
       : [];
 
   // Group params by event
@@ -110,21 +107,10 @@ export async function getWorkspaceParameters(
 ) {
   await requireWorkspace(projectId, workspaceId);
 
-  const allEvents = await db
-    .select({ id: events.id, name: events.name })
-    .from(events)
-    .where(eq(events.specVersionId, workspaceId));
-
-  if (allEvents.length === 0) return [];
-
-  const eventIds = allEvents.map((e) => e.id);
-  const eventNameById = new Map(allEvents.map((e) => [e.id, e.name]));
-
+  // Parameters are now workspace-level — query directly
   const allParams = await db
     .select({
       id: parameters.id,
-      eventId: parameters.eventId,
-      sourceParameterId: parameters.sourceParameterId,
       name: parameters.name,
       type: parameters.type,
       description: parameters.description,
@@ -132,46 +118,40 @@ export async function getWorkspaceParameters(
       exampleValue: parameters.exampleValue,
     })
     .from(parameters)
-    .where(inArray(parameters.eventId, eventIds))
+    .where(eq(parameters.specVersionId, workspaceId))
     .orderBy(parameters.name);
 
-  // Group by sourceParameterId to deduplicate across events
-  const grouped = new Map<
-    string,
-    {
-      name: string;
-      type: string;
-      description: string | null;
-      isRequired: boolean;
-      exampleValue: string | null;
-      events: string[];
-    }
-  >();
+  if (allParams.length === 0) return [];
 
-  for (const param of allParams) {
-    const key = param.sourceParameterId ?? param.id;
-    const existing = grouped.get(key);
-    const eventName = eventNameById.get(param.eventId) ?? "Unknown";
+  // Get event names for each parameter via junction
+  const paramIds = allParams.map((p) => p.id);
+  const junctions = await db
+    .select({
+      parameterId: eventParameters.parameterId,
+      eventName: events.name,
+    })
+    .from(eventParameters)
+    .innerJoin(events, eq(events.id, eventParameters.eventId))
+    .where(inArray(eventParameters.parameterId, paramIds));
+
+  const eventsByParam = new Map<string, string[]>();
+  for (const j of junctions) {
+    const existing = eventsByParam.get(j.parameterId);
     if (existing) {
-      if (!existing.events.includes(eventName)) {
-        existing.events.push(eventName);
-      }
-      if (param.isRequired) existing.isRequired = true;
+      if (!existing.includes(j.eventName)) existing.push(j.eventName);
     } else {
-      grouped.set(key, {
-        name: param.name,
-        type: param.type,
-        description: param.description,
-        isRequired: param.isRequired,
-        exampleValue: param.exampleValue,
-        events: [eventName],
-      });
+      eventsByParam.set(j.parameterId, [j.eventName]);
     }
   }
 
-  return Array.from(grouped.entries()).map(([id, data]) => ({
-    id,
-    ...data,
+  return allParams.map((p) => ({
+    id: p.id,
+    name: p.name,
+    type: p.type,
+    description: p.description,
+    isRequired: p.isRequired,
+    exampleValue: p.exampleValue,
+    events: eventsByParam.get(p.id) ?? [],
   }));
 }
 
@@ -285,7 +265,7 @@ export async function updateEvent(
 export async function updateParameterField(
   projectId: string,
   workspaceId: string,
-  eventId: string,
+  _eventId: string,
   parameterId: string,
   field: "name" | "type" | "description" | "isRequired" | "exampleValue" | "origin",
   value: string | boolean
@@ -296,7 +276,7 @@ export async function updateParameterField(
     .select()
     .from(parameters)
     .where(
-      and(eq(parameters.id, parameterId), eq(parameters.eventId, eventId))
+      and(eq(parameters.id, parameterId), eq(parameters.specVersionId, workspaceId))
     )
     .limit(1);
   if (!existing) throw new Error("Parameter not found");
@@ -335,6 +315,15 @@ export async function deleteEvent(
 
   await db.delete(events).where(eq(events.id, eventId));
 
+  // Clean up orphaned parameters (no junction rows left)
+  await db.execute(sql`
+    DELETE FROM parameters p
+    WHERE p.spec_version_id = ${workspaceId}
+    AND NOT EXISTS (
+      SELECT 1 FROM event_parameters ep WHERE ep.parameter_id = p.id
+    )
+  `);
+
   revalidateWorkspace(projectId, workspaceId);
 }
 
@@ -366,11 +355,11 @@ export async function getCustomFieldsForWorkspace(
   const eventIds = workspaceEvents.map((e) => e.id);
   if (eventIds.length === 0) return { definitions, values: [] };
 
-  // Get all parameter IDs for these events
+  // Get all parameter IDs for this workspace directly
   const workspaceParams = await db
     .select({ id: parameters.id })
     .from(parameters)
-    .where(inArray(parameters.eventId, eventIds));
+    .where(eq(parameters.specVersionId, workspaceId));
 
   const paramIds = workspaceParams.map((p) => p.id);
 

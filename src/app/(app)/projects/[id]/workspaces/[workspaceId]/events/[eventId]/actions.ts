@@ -1,13 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, and, max } from "drizzle-orm";
+import { eq, and, max, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   projects,
   specVersions,
   events,
   parameters,
+  eventParameters,
 } from "@/lib/db/schema";
 import { createParameterSchema } from "@/lib/validators/spec";
 import { requireUserContext } from "@/lib/auth/user-context";
@@ -70,11 +71,18 @@ export async function getParameters(
   eventId: string
 ): Promise<Parameter[]> {
   await requireEvent(projectId, workspaceId, eventId);
-  return db
-    .select()
-    .from(parameters)
-    .where(eq(parameters.eventId, eventId))
-    .orderBy(parameters.sortOrder);
+
+  const rows = await db
+    .select({
+      param: parameters,
+      sortOrder: eventParameters.sortOrder,
+    })
+    .from(eventParameters)
+    .innerJoin(parameters, eq(parameters.id, eventParameters.parameterId))
+    .where(eq(eventParameters.eventId, eventId))
+    .orderBy(eventParameters.sortOrder);
+
+  return rows.map((r) => r.param);
 }
 
 export async function createParameter(
@@ -103,25 +111,26 @@ export async function createParameter(
     parentId,
   });
 
-  // If parentId provided, verify it belongs to same event
+  // If parentId provided, verify it belongs to same workspace
   if (parentId) {
     const [parent] = await db
       .select()
       .from(parameters)
-      .where(and(eq(parameters.id, parentId), eq(parameters.eventId, eventId)))
+      .where(and(eq(parameters.id, parentId), eq(parameters.specVersionId, workspaceId)))
       .limit(1);
     if (!parent) throw new Error("Parent parameter not found");
   }
 
-  // Auto-compute sort order
+  // Auto-compute sort order for junction
   const [maxSort] = await db
-    .select({ max: max(parameters.sortOrder) })
-    .from(parameters)
-    .where(eq(parameters.eventId, eventId));
+    .select({ max: max(eventParameters.sortOrder) })
+    .from(eventParameters)
+    .where(eq(eventParameters.eventId, eventId));
   const sortOrder = (maxSort?.max ?? -1) + 1;
 
-  await db.insert(parameters).values({
-    eventId,
+  // Create the parameter at workspace level
+  const [param] = await db.insert(parameters).values({
+    specVersionId: workspaceId,
     parentId: parentId ?? null,
     name,
     type: type as "string" | "number" | "boolean" | "array" | "object",
@@ -129,6 +138,12 @@ export async function createParameter(
     isRequired,
     exampleValue: exampleValue ?? null,
     origin: origin ?? null,
+  }).returning({ id: parameters.id });
+
+  // Link to this event via junction
+  await db.insert(eventParameters).values({
+    eventId,
+    parameterId: param.id,
     sortOrder,
   });
 
@@ -144,11 +159,16 @@ export async function updateParameter(
 ) {
   await requireEvent(projectId, workspaceId, eventId);
 
+  // Verify parameter exists and is linked to this event
   const [existing] = await db
-    .select()
-    .from(parameters)
+    .select({ param: parameters })
+    .from(eventParameters)
+    .innerJoin(parameters, eq(parameters.id, eventParameters.parameterId))
     .where(
-      and(eq(parameters.id, parameterId), eq(parameters.eventId, eventId))
+      and(
+        eq(eventParameters.eventId, eventId),
+        eq(eventParameters.parameterId, parameterId)
+      )
     )
     .limit(1);
   if (!existing) throw new Error("Parameter not found");
@@ -183,17 +203,37 @@ export async function deleteParameter(
 ) {
   await requireEvent(projectId, workspaceId, eventId);
 
+  // Verify junction row exists
   const [existing] = await db
     .select()
-    .from(parameters)
+    .from(eventParameters)
     .where(
-      and(eq(parameters.id, parameterId), eq(parameters.eventId, eventId))
+      and(
+        eq(eventParameters.eventId, eventId),
+        eq(eventParameters.parameterId, parameterId)
+      )
     )
     .limit(1);
   if (!existing) throw new Error("Parameter not found");
 
-  // Children cascade-delete via DB FK
-  await db.delete(parameters).where(eq(parameters.id, parameterId));
+  // Remove junction row
+  await db
+    .delete(eventParameters)
+    .where(
+      and(
+        eq(eventParameters.eventId, eventId),
+        eq(eventParameters.parameterId, parameterId)
+      )
+    );
+
+  // Delete parameter if no more events reference it
+  await db.execute(sql`
+    DELETE FROM parameters
+    WHERE id = ${parameterId}
+    AND NOT EXISTS (
+      SELECT 1 FROM event_parameters ep WHERE ep.parameter_id = ${parameterId}
+    )
+  `);
 
   revalidateEvent(projectId, workspaceId, eventId);
 }

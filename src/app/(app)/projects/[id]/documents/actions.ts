@@ -8,6 +8,7 @@ import {
   specVersions,
   events,
   parameters,
+  eventParameters,
   implementationDocuments,
   implDocumentEvents,
 } from "@/lib/db/schema";
@@ -171,17 +172,21 @@ export async function createDocument(
 
   // Fetch all parameters for selected events
   const eventIds = selectedEvents.map((e) => e.id);
-  const allParams = await db
-    .select()
-    .from(parameters)
-    .where(inArray(parameters.eventId, eventIds))
-    .orderBy(parameters.sortOrder);
+  const allParamRows = await db
+    .select({
+      param: parameters,
+      eventId: eventParameters.eventId,
+    })
+    .from(eventParameters)
+    .innerJoin(parameters, eq(parameters.id, eventParameters.parameterId))
+    .where(inArray(eventParameters.eventId, eventIds))
+    .orderBy(eventParameters.sortOrder);
 
-  const paramsByEvent = new Map<string, (typeof allParams)[number][]>();
-  for (const p of allParams) {
+  const paramsByEvent = new Map<string, (typeof allParamRows)[number]["param"][]>();
+  for (const p of allParamRows) {
     const existing = paramsByEvent.get(p.eventId);
-    if (existing) existing.push(p);
-    else paramsByEvent.set(p.eventId, [p]);
+    if (existing) existing.push(p.param);
+    else paramsByEvent.set(p.eventId, [p.param]);
   }
 
   // Create document + snapshot events in a transaction

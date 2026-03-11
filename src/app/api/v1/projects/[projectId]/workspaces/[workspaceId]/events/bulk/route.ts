@@ -1,6 +1,6 @@
-import { eq, max } from "drizzle-orm";
+import { eq, and, max } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { events, parameters } from "@/lib/db/schema";
+import { events, parameters, eventParameters } from "@/lib/db/schema";
 import { requireApiAuth, isAuthError } from "@/lib/api/auth";
 import { requireApiWorkspace } from "@/lib/api/access";
 import {
@@ -41,7 +41,8 @@ const bulkCreateSchema = z.object({
  * POST /api/v1/projects/:projectId/workspaces/:workspaceId/events/bulk
  *
  * Create multiple events with their parameters in a single request.
- * Designed for AI agents that generate full specs at once.
+ * Auto-deduplicates parameters: if a parameter with the same name+type already
+ * exists in the workspace, it reuses it and creates a junction row.
  */
 export async function POST(
   request: Request,
@@ -63,12 +64,24 @@ export async function POST(
     const body = await request.json();
     const validated = bulkCreateSchema.parse(body);
 
-    // Get current max sort order
+    // Get current max sort order for events
     const [maxSort] = await db
       .select({ max: max(events.sortOrder) })
       .from(events)
       .where(eq(events.specVersionId, workspaceId));
     let nextSort = (maxSort?.max ?? -1) + 1;
+
+    // Cache of existing workspace params for dedup: "name|type" → param id
+    const paramCache = new Map<string, string>();
+
+    // Load existing params into cache
+    const existingParams = await db
+      .select({ id: parameters.id, name: parameters.name, type: parameters.type })
+      .from(parameters)
+      .where(eq(parameters.specVersionId, workspaceId));
+    for (const p of existingParams) {
+      paramCache.set(`${p.name}|${p.type}`, p.id);
+    }
 
     const createdEvents = [];
 
@@ -87,27 +100,53 @@ export async function POST(
         })
         .returning();
 
-      const createdParams = [];
+      const eventParamRows = [];
       let paramSort = 0;
+
       for (const paramData of eventData.parameters) {
-        const [param] = await db
-          .insert(parameters)
+        const cacheKey = `${paramData.name}|${paramData.type}`;
+        let paramId = paramCache.get(cacheKey);
+
+        if (!paramId) {
+          // Create new workspace-level parameter
+          const [param] = await db
+            .insert(parameters)
+            .values({
+              specVersionId: workspaceId,
+              parentId: null,
+              name: paramData.name,
+              type: paramData.type,
+              description: paramData.description ?? null,
+              isRequired: paramData.isRequired,
+              exampleValue: paramData.exampleValue ?? null,
+              origin: paramData.origin ?? null,
+            })
+            .returning();
+          paramId = param.id;
+          paramCache.set(cacheKey, paramId);
+          eventParamRows.push(param);
+        } else {
+          // Reuse existing — fetch it for the response
+          const [existing] = await db
+            .select()
+            .from(parameters)
+            .where(eq(parameters.id, paramId))
+            .limit(1);
+          if (existing) eventParamRows.push(existing);
+        }
+
+        // Create junction row
+        await db
+          .insert(eventParameters)
           .values({
             eventId: event.id,
-            parentId: null,
-            name: paramData.name,
-            type: paramData.type,
-            description: paramData.description ?? null,
-            isRequired: paramData.isRequired,
-            exampleValue: paramData.exampleValue ?? null,
-            origin: paramData.origin ?? null,
+            parameterId: paramId,
             sortOrder: paramSort++,
           })
-          .returning();
-        createdParams.push(param);
+          .onConflictDoNothing();
       }
 
-      createdEvents.push({ ...event, parameters: createdParams });
+      createdEvents.push({ ...event, parameters: eventParamRows });
     }
 
     return ok({ created: createdEvents.length, events: createdEvents });

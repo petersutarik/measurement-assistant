@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { parameters } from "@/lib/db/schema";
+import { parameters, eventParameters } from "@/lib/db/schema";
 import { requireApiAuth, isAuthError } from "@/lib/api/auth";
 import { requireApiParameter } from "@/lib/api/access";
 import {
@@ -132,7 +132,25 @@ export async function DELETE(
     );
     if (!param) return notFound("Parameter not found");
 
-    await db.delete(parameters).where(eq(parameters.id, parameterId));
+    // Remove junction row
+    await db
+      .delete(eventParameters)
+      .where(
+        and(
+          eq(eventParameters.eventId, eventId),
+          eq(eventParameters.parameterId, parameterId)
+        )
+      );
+
+    // Delete parameter if orphaned
+    await db.execute(sql`
+      DELETE FROM parameters
+      WHERE id = ${parameterId}
+      AND NOT EXISTS (
+        SELECT 1 FROM event_parameters ep WHERE ep.parameter_id = ${parameterId}
+      )
+    `);
+
     return noContent();
   } catch (error) {
     return serverError(error);

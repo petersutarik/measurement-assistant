@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { events, parameters } from "@/lib/db/schema";
+import { events, parameters, eventParameters } from "@/lib/db/schema";
 import { requireApiAuth, isAuthError } from "@/lib/api/auth";
 import { requireApiEvent } from "@/lib/api/access";
 import {
@@ -42,14 +42,15 @@ export async function GET(
     const event = await requireEvent(auth, projectId, workspaceId, eventId);
     if (!event) return notFound("Event not found");
 
-    // Include parameters
+    // Include parameters via junction
     const params_ = await db
-      .select()
-      .from(parameters)
-      .where(eq(parameters.eventId, eventId))
-      .orderBy(parameters.sortOrder);
+      .select({ param: parameters, sortOrder: eventParameters.sortOrder })
+      .from(eventParameters)
+      .innerJoin(parameters, eq(parameters.id, eventParameters.parameterId))
+      .where(eq(eventParameters.eventId, eventId))
+      .orderBy(eventParameters.sortOrder);
 
-    return ok({ ...event, parameters: params_ });
+    return ok({ ...event, parameters: params_.map((r) => r.param) });
   } catch (error) {
     return serverError(error);
   }

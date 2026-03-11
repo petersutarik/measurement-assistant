@@ -1,9 +1,9 @@
 import { eq, inArray } from "drizzle-orm";
-import { events, parameters, customFieldValues } from "@/lib/db/schema";
+import { events, parameters, eventParameters, customFieldValues } from "@/lib/db/schema";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 /**
- * Clone events, parameters, and custom field values from one spec version to another.
+ * Clone events, parameters, junction rows, and custom field values from one spec version to another.
  * Handles parentId remapping for nested parameters in a two-pass approach.
  *
  * Accepts any Drizzle db instance (connection or transaction).
@@ -38,21 +38,20 @@ export async function cloneSpecData(db: NodePgDatabase<any>, sourceId: string, t
     eventIdMap.set(evt.id, inserted.id);
   }
 
-  // Collect all parameters for source events
-  const sourceEventIds = sourceEvents.map((e) => e.id);
+  // Clone parameters (workspace-level) and build old→new ID map
   const sourceParams = await db
     .select()
     .from(parameters)
-    .where(inArray(parameters.eventId, sourceEventIds));
+    .where(eq(parameters.specVersionId, sourceId));
 
-  // Insert parameters with remapped eventId and null parentId initially
   const paramIdMap = new Map<string, string>();
   if (sourceParams.length > 0) {
+    // First pass: insert all params with null parentId
     for (const param of sourceParams) {
       const [inserted] = await db
         .insert(parameters)
         .values({
-          eventId: eventIdMap.get(param.eventId)!,
+          specVersionId: targetId,
           parentId: null,
           name: param.name,
           type: param.type,
@@ -60,7 +59,6 @@ export async function cloneSpecData(db: NodePgDatabase<any>, sourceId: string, t
           isRequired: param.isRequired,
           exampleValue: param.exampleValue,
           origin: param.origin,
-          sortOrder: param.sortOrder,
           sourceParameterId: param.sourceParameterId ?? param.id,
         })
         .returning({ id: parameters.id });
@@ -77,6 +75,25 @@ export async function cloneSpecData(db: NodePgDatabase<any>, sourceId: string, t
           .set({ parentId: newParentId })
           .where(eq(parameters.id, newParamId));
       }
+    }
+  }
+
+  // Clone junction rows (event_parameters)
+  const sourceEventIds = sourceEvents.map((e) => e.id);
+  const sourceJunctions = await db
+    .select()
+    .from(eventParameters)
+    .where(inArray(eventParameters.eventId, sourceEventIds));
+
+  for (const jn of sourceJunctions) {
+    const newEventId = eventIdMap.get(jn.eventId);
+    const newParamId = paramIdMap.get(jn.parameterId);
+    if (newEventId && newParamId) {
+      await db.insert(eventParameters).values({
+        eventId: newEventId,
+        parameterId: newParamId,
+        sortOrder: jn.sortOrder,
+      });
     }
   }
 

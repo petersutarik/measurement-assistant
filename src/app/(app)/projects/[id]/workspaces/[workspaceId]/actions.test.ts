@@ -15,9 +15,11 @@ function chainMock(): Record<string, unknown> {
     "from",
     "where",
     "leftJoin",
+    "innerJoin",
     "groupBy",
     "values",
     "set",
+    "returning",
   ]) {
     self[method] = vi.fn(() => self);
   }
@@ -43,6 +45,7 @@ vi.mock("@/lib/db", () => ({
       mockDelete(t);
       return chainMock();
     },
+    execute: vi.fn(() => Promise.resolve()),
   },
 }));
 
@@ -50,7 +53,8 @@ vi.mock("@/lib/db/schema", () => ({
   projects: { id: "id", organizationId: "orgId" },
   specVersions: { id: "id", projectId: "pId", type: "type" },
   events: { id: "id", specVersionId: "svId", sortOrder: "so" },
-  parameters: { id: "id", eventId: "eId" },
+  parameters: { id: "id", specVersionId: "svId" },
+  eventParameters: { eventId: "eId", parameterId: "pId", sortOrder: "so" },
 }));
 
 const mockRequireUserContext = vi.fn();
@@ -83,6 +87,7 @@ describe("event actions", () => {
       queryResults.push([fakeProject]); // requireWorkspace → project
       queryResults.push([fakeWorkspace]); // requireWorkspace → workspace
       queryResults.push([{ max: 2 }]); // max sortOrder (terminal via limit/orderBy)
+      queryResults.push([{ id: "ev-new" }]); // insert returning
 
       const formData = new FormData();
       formData.set("name", "add_to_cart");
@@ -143,13 +148,16 @@ describe("event actions", () => {
   });
 
   describe("deleteEvent", () => {
-    it("deletes existing event", async () => {
+    it("deletes existing event and cleans up orphaned parameters", async () => {
       queryResults.push([fakeProject]);
       queryResults.push([fakeWorkspace]);
       queryResults.push([fakeEvent]);
+      queryResults.push(undefined); // delete event
 
+      const { db } = await import("@/lib/db");
       await deleteEvent("proj-1", "ws-1", "ev-1");
       expect(mockDelete).toHaveBeenCalled();
+      expect(db.execute).toHaveBeenCalled();
     });
 
     it("throws when event not found", async () => {

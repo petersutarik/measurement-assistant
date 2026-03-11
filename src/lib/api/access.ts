@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   events,
+  eventParameters,
   organizations,
   parameters,
   projects,
@@ -99,11 +100,19 @@ export async function requireApiParameter(
   const event = await requireApiEvent(auth, projectId, workspaceId, eventId);
   if (!event) return null;
 
-  const [param] = await db
-    .select()
+  // Verify parameter exists and is linked to this event via junction
+  const [row] = await db
+    .select({ param: parameters })
     .from(parameters)
-    .where(and(eq(parameters.id, parameterId), eq(parameters.eventId, eventId)))
+    .innerJoin(
+      eventParameters,
+      and(
+        eq(eventParameters.parameterId, parameters.id),
+        eq(eventParameters.eventId, eventId)
+      )
+    )
+    .where(eq(parameters.id, parameterId))
     .limit(1);
 
-  return param ?? null;
+  return row?.param ?? null;
 }

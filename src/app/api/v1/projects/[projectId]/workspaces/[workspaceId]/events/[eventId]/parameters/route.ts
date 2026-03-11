@@ -1,8 +1,8 @@
 import { eq, and, max } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { parameters } from "@/lib/db/schema";
+import { parameters, eventParameters } from "@/lib/db/schema";
 import { requireApiAuth, isAuthError } from "@/lib/api/auth";
-import { requireApiEvent } from "@/lib/api/access";
+import { requireApiEvent, requireApiWorkspace } from "@/lib/api/access";
 import {
   ok,
   created,
@@ -43,12 +43,13 @@ export async function GET(
       return notFound("Event not found");
 
     const rows = await db
-      .select()
-      .from(parameters)
-      .where(eq(parameters.eventId, eventId))
-      .orderBy(parameters.sortOrder);
+      .select({ param: parameters, sortOrder: eventParameters.sortOrder })
+      .from(eventParameters)
+      .innerJoin(parameters, eq(parameters.id, eventParameters.parameterId))
+      .where(eq(eventParameters.eventId, eventId))
+      .orderBy(eventParameters.sortOrder);
 
-    return ok(rows);
+    return ok(rows.map((r) => r.param));
   } catch (error) {
     return serverError(error);
   }
@@ -85,7 +86,7 @@ export async function POST(
         .where(
           and(
             eq(parameters.id, validated.parentId),
-            eq(parameters.eventId, eventId)
+            eq(parameters.specVersionId, workspaceId)
           )
         )
         .limit(1);
@@ -93,15 +94,16 @@ export async function POST(
     }
 
     const [maxSort] = await db
-      .select({ max: max(parameters.sortOrder) })
-      .from(parameters)
-      .where(eq(parameters.eventId, eventId));
+      .select({ max: max(eventParameters.sortOrder) })
+      .from(eventParameters)
+      .where(eq(eventParameters.eventId, eventId));
     const sortOrder = (maxSort?.max ?? -1) + 1;
 
+    // Create workspace-level parameter
     const [param] = await db
       .insert(parameters)
       .values({
-        eventId,
+        specVersionId: workspaceId,
         parentId: validated.parentId ?? null,
         name: validated.name,
         type: validated.type,
@@ -109,9 +111,15 @@ export async function POST(
         isRequired: validated.isRequired ?? false,
         exampleValue: validated.exampleValue ?? null,
         origin: validated.origin ?? null,
-        sortOrder,
       })
       .returning();
+
+    // Link to event via junction
+    await db.insert(eventParameters).values({
+      eventId,
+      parameterId: param.id,
+      sortOrder,
+    });
 
     return created(param);
   } catch (error) {

@@ -34,6 +34,10 @@ yarn-error.log*
 .env*
 !.env.example
 
+# measurement plans (local working files)
+.measurement/context/
+.measurement/plans/
+
 # vercel
 .vercel
 

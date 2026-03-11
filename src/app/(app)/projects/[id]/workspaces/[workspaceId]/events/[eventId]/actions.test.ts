@@ -15,9 +15,11 @@ function chainMock(): Record<string, unknown> {
     "from",
     "where",
     "leftJoin",
+    "innerJoin",
     "groupBy",
     "values",
     "set",
+    "returning",
   ]) {
     self[method] = vi.fn(() => self);
   }
@@ -43,6 +45,7 @@ vi.mock("@/lib/db", () => ({
       mockDelete(t);
       return chainMock();
     },
+    execute: vi.fn(() => Promise.resolve()),
   },
 }));
 
@@ -50,7 +53,8 @@ vi.mock("@/lib/db/schema", () => ({
   projects: { id: "id", organizationId: "orgId" },
   specVersions: { id: "id", projectId: "pId", type: "type" },
   events: { id: "id", specVersionId: "svId" },
-  parameters: { id: "id", eventId: "eId", sortOrder: "so" },
+  parameters: { id: "id", specVersionId: "svId" },
+  eventParameters: { eventId: "eId", parameterId: "pId", sortOrder: "so" },
 }));
 
 const mockRequireUserContext = vi.fn();
@@ -90,7 +94,7 @@ describe("parameter actions", () => {
       queryResults.push([fakeProject]); // requireEvent → project
       queryResults.push([fakeWorkspace]); // requireEvent → workspace
       queryResults.push([fakeEvent]); // requireEvent → event
-      queryResults.push([fakeParam]); // actual query → orderBy
+      queryResults.push([{ param: fakeParam, sortOrder: 0 }]); // junction query → orderBy
 
       const result = await getParameters("proj-1", "ws-1", "ev-1");
       expect(mockRequireUserContext).toHaveBeenCalled();
@@ -103,7 +107,9 @@ describe("parameter actions", () => {
       queryResults.push([fakeProject]);
       queryResults.push([fakeWorkspace]);
       queryResults.push([fakeEvent]);
-      queryResults.push([{ max: 0 }]); // max sortOrder
+      queryResults.push([{ max: 0 }]); // max sortOrder from eventParameters
+      queryResults.push([{ id: "p-new" }]); // insert parameters returning
+      queryResults.push(undefined); // insert eventParameters junction
 
       const formData = new FormData();
       formData.set("name", "currency");
@@ -148,7 +154,7 @@ describe("parameter actions", () => {
       queryResults.push([fakeProject]);
       queryResults.push([fakeWorkspace]);
       queryResults.push([fakeEvent]);
-      queryResults.push([fakeParam]); // existing check
+      queryResults.push([{ param: fakeParam }]); // existing check via junction innerJoin
 
       const formData = new FormData();
       formData.set("name", "updated");
@@ -177,21 +183,24 @@ describe("parameter actions", () => {
   });
 
   describe("deleteParameter", () => {
-    it("deletes existing parameter", async () => {
+    it("deletes junction row and cleans up orphaned parameter", async () => {
       queryResults.push([fakeProject]);
       queryResults.push([fakeWorkspace]);
       queryResults.push([fakeEvent]);
-      queryResults.push([fakeParam]);
+      queryResults.push([{ eventId: "ev-1", parameterId: "p-1" }]); // existing junction check
+      queryResults.push(undefined); // delete from eventParameters
 
+      const { db } = await import("@/lib/db");
       await deleteParameter("proj-1", "ws-1", "ev-1", "p-1");
       expect(mockDelete).toHaveBeenCalled();
+      expect(db.execute).toHaveBeenCalled();
     });
 
     it("throws when parameter not found", async () => {
       queryResults.push([fakeProject]);
       queryResults.push([fakeWorkspace]);
       queryResults.push([fakeEvent]);
-      queryResults.push([]); // no parameter
+      queryResults.push([]); // no junction row
 
       await expect(
         deleteParameter("proj-1", "ws-1", "ev-1", "p-1")

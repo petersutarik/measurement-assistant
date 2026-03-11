@@ -1,6 +1,6 @@
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { specVersions, events, parameters } from "@/lib/db/schema";
+import { specVersions, events, parameters, eventParameters } from "@/lib/db/schema";
 import { requireApiAuth, isAuthError } from "@/lib/api/auth";
 import { requireApiProject } from "@/lib/api/access";
 import { ok, notFound, serverError } from "@/lib/api/response";
@@ -49,17 +49,22 @@ export async function GET(
     const allParams =
       eventIds.length > 0
         ? await db
-            .select()
-            .from(parameters)
-            .where(inArray(parameters.eventId, eventIds))
-            .orderBy(parameters.sortOrder)
+            .select({
+              param: parameters,
+              eventId: eventParameters.eventId,
+              sortOrder: eventParameters.sortOrder,
+            })
+            .from(eventParameters)
+            .innerJoin(parameters, eq(parameters.id, eventParameters.parameterId))
+            .where(inArray(eventParameters.eventId, eventIds))
+            .orderBy(eventParameters.sortOrder)
         : [];
 
-    const paramsByEvent = new Map<string, typeof allParams>();
+    const paramsByEvent = new Map<string, (typeof allParams)[number]["param"][]>();
     for (const p of allParams) {
       const existing = paramsByEvent.get(p.eventId);
-      if (existing) existing.push(p);
-      else paramsByEvent.set(p.eventId, [p]);
+      if (existing) existing.push(p.param);
+      else paramsByEvent.set(p.eventId, [p.param]);
     }
 
     return ok({

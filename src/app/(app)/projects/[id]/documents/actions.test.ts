@@ -18,6 +18,7 @@ function chainMock(): Record<string, unknown> {
     "from",
     "where",
     "leftJoin",
+    "innerJoin",
     "groupBy",
     "values",
     "set",
@@ -72,7 +73,8 @@ vi.mock("@/lib/db/schema", () => ({
     name: "name",
   },
   events: { id: "id", specVersionId: "svId", sortOrder: "so" },
-  parameters: { id: "id", eventId: "eId", sortOrder: "so" },
+  parameters: { id: "id", specVersionId: "svId" },
+  eventParameters: { eventId: "eId", parameterId: "pId", sortOrder: "so" },
   implementationDocuments: {
     id: "id",
     projectId: "pId",
@@ -231,18 +233,22 @@ describe("document actions", () => {
       ]); // events
       queryResults.push([
         {
-          id: U.param1,
+          param: {
+            id: U.param1,
+            name: "page_title",
+            type: "string",
+            description: "Title of page",
+            isRequired: true,
+            exampleValue: "Home",
+            origin: null,
+            parentId: null,
+            sortOrder: 0,
+            specVersionId: U.sv,
+            sourceParameterId: null,
+          },
           eventId: U.event1,
-          name: "page_title",
-          type: "string",
-          description: "Title of page",
-          isRequired: true,
-          exampleValue: "Home",
-          origin: null,
-          parentId: null,
-          sortOrder: 0,
         },
-      ]); // params
+      ]); // params via junction
       queryResults.push([{ id: U.docNew }]); // tx: insert doc
       queryResults.push([]); // tx: insert snapshot
 

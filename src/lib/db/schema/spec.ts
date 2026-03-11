@@ -5,6 +5,7 @@ import {
   integer,
   boolean,
   timestamp,
+  unique,
 } from "drizzle-orm/pg-core";
 import {
   timestamps,
@@ -49,12 +50,12 @@ export const events = pgTable("events", {
   ...timestamps,
 });
 
-// Event parameters — self-referencing for nesting
+// Workspace-level parameters — shared across events via junction table
 export const parameters = pgTable("parameters", {
   id: uuid("id").primaryKey().defaultRandom(),
-  eventId: uuid("event_id")
+  specVersionId: uuid("spec_version_id")
     .notNull()
-    .references(() => events.id, { onDelete: "cascade" }),
+    .references(() => specVersions.id, { onDelete: "cascade" }),
   parentId: uuid("parent_id"), // self-ref for nesting
   sharedSchemaId: uuid("shared_schema_id"), // FK set via relations
   name: text("name").notNull(),
@@ -64,10 +65,26 @@ export const parameters = pgTable("parameters", {
   exampleValue: text("example_value"),
   enumId: uuid("enum_id"), // FK set via relations
   origin: text("origin"),
-  sortOrder: integer("sort_order").notNull().default(0),
   sourceParameterId: uuid("source_parameter_id"), // root origin
   ...timestamps,
 });
+
+// Junction: which parameters belong to which events (+ per-event sort order)
+export const eventParameters = pgTable(
+  "event_parameters",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    parameterId: uuid("parameter_id")
+      .notNull()
+      .references(() => parameters.id, { onDelete: "cascade" }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...createdAt,
+  },
+  (t) => [unique().on(t.eventId, t.parameterId)]
+);
 
 // Reusable parameter groups (e.g., Item object)
 export const sharedSchemas = pgTable("shared_schemas", {
