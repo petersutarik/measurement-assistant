@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,11 +18,11 @@ import {
   FileText,
   Globe,
   StickyNote,
+  Upload,
   X,
   Loader2,
   ArrowRight,
   ArrowLeft,
-  Sparkles,
   ShoppingCart,
   Target,
   LayoutDashboard,
@@ -38,7 +38,7 @@ import type { PlanTemplate } from "@/types";
 
 type ContextItem = {
   id: string;
-  type: "note" | "url";
+  type: "note" | "url" | "file";
   name: string;
   content: string;
   url?: string;
@@ -72,6 +72,30 @@ export default function NewPlanPage({
   // URL form
   const [urlInput, setUrlInput] = useState("");
   const [showUrlForm, setShowUrlForm] = useState(false);
+
+  // File upload
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files) return;
+    for (const file of Array.from(files)) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const content = reader.result as string;
+        const item: ContextItem = {
+          id: crypto.randomUUID(),
+          type: "file",
+          name: file.name,
+          content: content.slice(0, 50000),
+        };
+        setContextItems((prev) => [...prev, item]);
+      };
+      reader.readAsText(file);
+    }
+    // Reset so the same file can be selected again
+    e.target.value = "";
+  }
 
   useEffect(() => {
     getTemplates().then(setTemplates);
@@ -119,9 +143,9 @@ export default function NewPlanPage({
         selectedTemplate?.document
       );
 
-      // Save context sources (URLs will be fetched server-side)
+      // Save context sources (URLs will be fetched server-side, files saved as notes)
       for (const item of contextItems) {
-        if (item.type === "note") {
+        if (item.type === "note" || item.type === "file") {
           await addContextNote(id, plan.id, item.name, item.content);
         } else if (item.type === "url" && item.url) {
           await addContextUrl(id, plan.id, item.url);
@@ -265,6 +289,8 @@ export default function NewPlanPage({
                     >
                       {item.type === "note" ? (
                         <StickyNote className="size-4 text-amber-500 shrink-0" />
+                      ) : item.type === "file" ? (
+                        <Upload className="size-4 text-green-500 shrink-0" />
                       ) : (
                         <Globe className="size-4 text-blue-500 shrink-0" />
                       )}
@@ -273,9 +299,9 @@ export default function NewPlanPage({
                           {item.name}
                         </p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {item.type === "note"
-                            ? `${item.content.slice(0, 100)}${item.content.length > 100 ? "..." : ""}`
-                            : item.url}
+                          {item.type === "url"
+                            ? item.url
+                            : `${item.content.slice(0, 100)}${item.content.length > 100 ? "..." : ""}`}
                         </p>
                       </div>
                       <Badge variant="secondary" className="text-xs shrink-0">
@@ -399,6 +425,22 @@ export default function NewPlanPage({
                     <Globe className="mr-2 size-4" />
                     Add URL
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="mr-2 size-4" />
+                    Upload File
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept=".txt,.md,.csv,.json,.xml,.html,.pdf,.doc,.docx"
+                    multiple
+                    onChange={handleFileUpload}
+                  />
                 </div>
               )}
 
@@ -451,7 +493,6 @@ export default function NewPlanPage({
                   </>
                 ) : (
                   <>
-                    <Sparkles className="mr-2 size-4" />
                     Start Planning
                   </>
                 )}

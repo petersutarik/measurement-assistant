@@ -11,6 +11,7 @@ import {
   projects,
   events,
   parameters,
+  eventParameters,
   specVersions,
 } from "@/lib/db/schema";
 import type { PlanMessage } from "@/types";
@@ -287,12 +288,13 @@ export async function getProjectEntities(projectId: string) {
         id: parameters.id,
         name: parameters.name,
         type: parameters.type,
-        eventId: parameters.eventId,
+        eventId: eventParameters.eventId,
         description: parameters.description,
       })
-      .from(parameters)
-      .where(inArray(parameters.eventId, eventIds))
-      .orderBy(parameters.sortOrder);
+      .from(eventParameters)
+      .innerJoin(parameters, eq(parameters.id, eventParameters.parameterId))
+      .where(inArray(eventParameters.eventId, eventIds))
+      .orderBy(eventParameters.sortOrder);
   }
 
   return { events: publishedEvents, parameters: publishedParams };

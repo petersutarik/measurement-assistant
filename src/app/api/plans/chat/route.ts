@@ -1,7 +1,10 @@
 import { streamText } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { getUserContext } from "@/lib/auth/user-context";
-import { PLAN_SYSTEM_PROMPT } from "@/lib/plans/prompts";
+import {
+  PLAN_SYSTEM_PROMPT,
+  PLAN_REFERENCE_EXAMPLE,
+} from "@/lib/plans/prompts";
 import type { PlanMessage } from "@/types";
 
 interface ContextSource {
@@ -32,6 +35,12 @@ export async function POST(req: Request) {
   // Build system prompt with all available context
   let systemPrompt = PLAN_SYSTEM_PROMPT;
 
+  // Include reference example on early turns (no document yet) to anchor format/depth.
+  // Once the document is being built, the example is no longer needed — saves tokens.
+  if (!document) {
+    systemPrompt += "\n\n" + PLAN_REFERENCE_EXAMPLE;
+  }
+
   if (contextSources && contextSources.length > 0) {
     systemPrompt += "\n\n## Context provided by the user\n";
     for (const source of contextSources) {
@@ -57,7 +66,7 @@ export async function POST(req: Request) {
   }
 
   const result = streamText({
-    model: anthropic("claude-sonnet-4-20250514"),
+    model: anthropic("claude-opus-4-20250514"),
     system: systemPrompt,
     messages: messages.map((m) => ({
       role: m.role as "user" | "assistant",

@@ -14,6 +14,9 @@ import {
   Globe,
   ChevronDown,
   ChevronRight,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { updatePlanDocument, updatePlanMessages } from "../actions";
 import type { PlanMessage } from "@/types";
@@ -100,9 +103,12 @@ export function PlanBuilder({
   const [selectedText, setSelectedText] = useState("");
   const [activePanel, setActivePanel] = useState<"chat" | "document">("chat");
   const [showContext, setShowContext] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editBuffer, setEditBuffer] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const documentRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // ── Autocomplete state ──────────────────────────────────────────
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -634,14 +640,68 @@ export function PlanBuilder({
           <div className="border-b px-4 py-2 flex items-center gap-2 shrink-0">
             <FileText className="size-4 text-muted-foreground" />
             <span className="text-sm font-medium">Plan Document</span>
-            {selectedText && (
-              <Badge variant="outline" className="text-xs ml-auto">
-                Text selected — click Quote in chat
-              </Badge>
+            {isEditing ? (
+              <div className="flex items-center gap-1 ml-auto">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    setIsEditing(false);
+                    setEditBuffer("");
+                  }}
+                >
+                  <X className="mr-1 size-3" />
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={async () => {
+                    setDocument(editBuffer);
+                    setIsEditing(false);
+                    await saveDocument(editBuffer);
+                  }}
+                >
+                  <Check className="mr-1 size-3" />
+                  Save
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 ml-auto">
+                {selectedText && (
+                  <Badge variant="outline" className="text-xs">
+                    Text selected — click Quote in chat
+                  </Badge>
+                )}
+                {document && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setEditBuffer(document);
+                      setIsEditing(true);
+                      setTimeout(() => editTextareaRef.current?.focus(), 0);
+                    }}
+                  >
+                    <Pencil className="mr-1 size-3" />
+                    Edit
+                  </Button>
+                )}
+              </div>
             )}
           </div>
           <div className="flex-1 overflow-y-auto p-6">
-            {document ? (
+            {isEditing ? (
+              <textarea
+                ref={editTextareaRef}
+                value={editBuffer}
+                onChange={(e) => setEditBuffer(e.target.value)}
+                className="w-full h-full min-h-[500px] resize-none bg-transparent font-mono text-sm leading-relaxed focus:outline-none"
+                spellCheck={false}
+              />
+            ) : document ? (
               <div className="prose prose-sm dark:prose-invert max-w-none">
                 <MarkdownRenderer content={document} />
               </div>
