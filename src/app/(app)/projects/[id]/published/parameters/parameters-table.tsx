@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Columns3,
   Group,
   ChevronDown,
+  ChevronRight,
   Type,
   Braces,
   ShieldCheck,
@@ -277,35 +278,48 @@ function GroupRows({
   cfDefById: Map<string, CustomFieldDefinition>;
   cfValueMap: Map<string, Map<string, unknown>>;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
+
   return (
     <>
       {isGrouped && (
-        <TableRow>
+        <TableRow
+          className="cursor-pointer hover:bg-muted/70"
+          onClick={() => setCollapsed((c) => !c)}
+        >
           <TableCell
             colSpan={visibleCols.length}
             className="bg-muted/50 py-2 font-medium text-sm"
           >
-            {group.label}{" "}
-            <span className="text-muted-foreground font-normal">
-              ({group.rows.length})
-            </span>
+            <div className="flex items-center gap-1.5">
+              {collapsed ? (
+                <ChevronRight className="size-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="size-4 text-muted-foreground" />
+              )}
+              {group.label}{" "}
+              <span className="text-muted-foreground font-normal">
+                ({group.rows.length})
+              </span>
+            </div>
           </TableCell>
         </TableRow>
       )}
-      {group.rows.map((row) => (
-        <TableRow key={row.id}>
-          {visibleCols.map((col) => (
-            <TableCell key={col.id}>
-              <CellContent
-                col={col.id}
-                row={row}
-                cfDefById={cfDefById}
-                cfValueMap={cfValueMap}
-              />
-            </TableCell>
-          ))}
-        </TableRow>
-      ))}
+      {!collapsed &&
+        group.rows.map((row) => (
+          <TableRow key={row.id}>
+            {visibleCols.map((col) => (
+              <TableCell key={col.id}>
+                <CellContent
+                  col={col.id}
+                  row={row}
+                  cfDefById={cfDefById}
+                  cfValueMap={cfValueMap}
+                />
+              </TableCell>
+            ))}
+          </TableRow>
+        ))}
     </>
   );
 }

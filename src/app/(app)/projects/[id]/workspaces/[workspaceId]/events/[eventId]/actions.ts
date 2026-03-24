@@ -195,6 +195,73 @@ export async function updateParameter(
   revalidateEvent(projectId, workspaceId, eventId);
 }
 
+export async function linkExistingParameter(
+  projectId: string,
+  workspaceId: string,
+  eventId: string,
+  parameterId: string
+) {
+  await requireEvent(projectId, workspaceId, eventId);
+
+  // Verify parameter belongs to same workspace
+  const [param] = await db
+    .select()
+    .from(parameters)
+    .where(
+      and(eq(parameters.id, parameterId), eq(parameters.specVersionId, workspaceId))
+    )
+    .limit(1);
+  if (!param) throw new Error("Parameter not found in workspace");
+
+  // Check not already linked
+  const [existing] = await db
+    .select()
+    .from(eventParameters)
+    .where(
+      and(
+        eq(eventParameters.eventId, eventId),
+        eq(eventParameters.parameterId, parameterId)
+      )
+    )
+    .limit(1);
+  if (existing) return; // already linked
+
+  const [maxSort] = await db
+    .select({ max: max(eventParameters.sortOrder) })
+    .from(eventParameters)
+    .where(eq(eventParameters.eventId, eventId));
+  const sortOrder = (maxSort?.max ?? -1) + 1;
+
+  await db.insert(eventParameters).values({
+    eventId,
+    parameterId,
+    sortOrder,
+  });
+
+  revalidateEvent(projectId, workspaceId, eventId);
+}
+
+/** Unlink a parameter from an event without deleting the parameter itself. */
+export async function unlinkParameter(
+  projectId: string,
+  workspaceId: string,
+  eventId: string,
+  parameterId: string
+) {
+  await requireEvent(projectId, workspaceId, eventId);
+
+  await db
+    .delete(eventParameters)
+    .where(
+      and(
+        eq(eventParameters.eventId, eventId),
+        eq(eventParameters.parameterId, parameterId)
+      )
+    );
+
+  revalidateEvent(projectId, workspaceId, eventId);
+}
+
 export async function deleteParameter(
   projectId: string,
   workspaceId: string,

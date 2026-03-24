@@ -6,6 +6,7 @@ import {
   Columns3,
   Group,
   ChevronDown,
+  ChevronRight,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -46,7 +47,10 @@ import { EditEventDialog } from "./edit-event-dialog";
 import { DeleteEventDialog } from "./delete-event-dialog";
 import { ParamHoverCard } from "./param-hover-card";
 import { upsertCustomFieldValue } from "./actions";
-import { createCustomFieldDefinition } from "../../settings/actions";
+import {
+  createCustomFieldDefinition,
+  deleteCustomFieldDefinition,
+} from "../../settings/actions";
 import type { Event, CustomFieldDefinition, CustomFieldValue } from "@/types";
 
 interface EventParam {
@@ -65,6 +69,16 @@ interface EventRow {
   params: EventParam[];
 }
 
+interface WorkspaceParam {
+  id: string;
+  name: string;
+  type: string;
+  description: string | null;
+  isRequired: boolean;
+  exampleValue: string | null;
+  origin: string | null;
+}
+
 interface EventsTableProps {
   projectId: string;
   workspaceId: string;
@@ -72,6 +86,7 @@ interface EventsTableProps {
   readOnly?: boolean;
   customFieldDefinitions?: CustomFieldDefinition[];
   customFieldValues?: CustomFieldValue[];
+  workspaceParams?: WorkspaceParam[];
 }
 
 const BUILTIN_COLUMNS: ColumnDef[] = [
@@ -95,6 +110,7 @@ export function EventsTable({
   readOnly = false,
   customFieldDefinitions: cfDefs = [],
   customFieldValues: cfValues = [],
+  workspaceParams: wsParams = [],
 }: EventsTableProps) {
   // Build column list: built-in + custom fields for events
   const eventCfDefs = useMemo(
@@ -164,6 +180,13 @@ export function EventsTable({
     [projectId]
   );
 
+  const handleDeleteColumn = useCallback(
+    async (fieldId: string) => {
+      await deleteCustomFieldDefinition(projectId, fieldId);
+    },
+    [projectId]
+  );
+
   const grouped = buildGroups(rows, groupBy);
 
   return (
@@ -219,13 +242,30 @@ export function EventsTable({
               {allColumns
                 .filter((c) => !c.alwaysVisible)
                 .map((col) => (
-                  <DropdownMenuCheckboxItem
-                    key={col.id}
-                    checked={isVisible(col.id)}
-                    onCheckedChange={() => toggleColumn(col.id)}
-                  >
-                    {col.label}
-                  </DropdownMenuCheckboxItem>
+                  <div key={col.id} className="flex items-center">
+                    <DropdownMenuCheckboxItem
+                      className="flex-1"
+                      checked={isVisible(col.id)}
+                      onCheckedChange={() => toggleColumn(col.id)}
+                    >
+                      {col.label}
+                    </DropdownMenuCheckboxItem>
+                    {!readOnly && col.id.startsWith("cf_") && (
+                      <button
+                        type="button"
+                        className="mr-2 p-0.5 rounded text-muted-foreground/50 hover:text-destructive transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const fieldId = col.id.slice(3);
+                          if (confirm(`Delete column "${col.label}"? This will remove all its values.`)) {
+                            handleDeleteColumn(fieldId);
+                          }
+                        }}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
                 ))}
             </DropdownMenuGroup>
           </DropdownMenuContent>
@@ -260,6 +300,7 @@ export function EventsTable({
                 cfDefById={cfDefById}
                 cfValueMap={cfValueMap}
                 onSaveCustomField={handleSaveCustomField}
+                workspaceParams={wsParams}
               />
             ))}
           </TableBody>
@@ -364,6 +405,7 @@ function GroupRows({
   cfDefById,
   cfValueMap,
   onSaveCustomField,
+  workspaceParams,
 }: {
   group: EventGroup;
   visibleCols: ColumnDef[];
@@ -374,38 +416,52 @@ function GroupRows({
   cfDefById: Map<string, CustomFieldDefinition>;
   cfValueMap: Map<string, Map<string, unknown>>;
   onSaveCustomField: (eventId: string, definitionId: string, value: unknown) => Promise<void>;
+  workspaceParams: WorkspaceParam[];
 }) {
+  const [collapsed, setCollapsed] = useState(false);
   // +1 for actions column, +1 for add-column button (both only in edit mode)
   const colSpan = visibleCols.length + (readOnly ? 0 : 2);
 
   return (
     <>
       {isGrouped && (
-        <TableRow>
+        <TableRow
+          className="cursor-pointer hover:bg-muted/70"
+          onClick={() => setCollapsed((c) => !c)}
+        >
           <TableCell
             colSpan={colSpan}
             className="bg-muted/50 py-2 font-medium text-sm"
           >
-            {group.label}{" "}
-            <span className="text-muted-foreground font-normal">
-              ({group.rows.length})
-            </span>
+            <div className="flex items-center gap-1.5">
+              {collapsed ? (
+                <ChevronRight className="size-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="size-4 text-muted-foreground" />
+              )}
+              {group.label}{" "}
+              <span className="text-muted-foreground font-normal">
+                ({group.rows.length})
+              </span>
+            </div>
           </TableCell>
         </TableRow>
       )}
-      {group.rows.map((row) => (
-        <EventRowComponent
-          key={row.event.id}
-          row={row}
-          visibleCols={visibleCols}
-          projectId={projectId}
-          workspaceId={workspaceId}
-          readOnly={readOnly}
-          cfDefById={cfDefById}
-          cfValueMap={cfValueMap}
-          onSaveCustomField={onSaveCustomField}
-        />
-      ))}
+      {!collapsed &&
+        group.rows.map((row) => (
+          <EventRowComponent
+            key={row.event.id}
+            row={row}
+            visibleCols={visibleCols}
+            projectId={projectId}
+            workspaceId={workspaceId}
+            readOnly={readOnly}
+            cfDefById={cfDefById}
+            cfValueMap={cfValueMap}
+            onSaveCustomField={onSaveCustomField}
+            workspaceParams={workspaceParams}
+          />
+        ))}
     </>
   );
 }
@@ -419,6 +475,7 @@ function EventRowComponent({
   cfDefById,
   cfValueMap,
   onSaveCustomField,
+  workspaceParams,
 }: {
   row: EventRow;
   visibleCols: ColumnDef[];
@@ -428,6 +485,7 @@ function EventRowComponent({
   cfDefById: Map<string, CustomFieldDefinition>;
   cfValueMap: Map<string, Map<string, unknown>>;
   onSaveCustomField: (eventId: string, definitionId: string, value: unknown) => Promise<void>;
+  workspaceParams: WorkspaceParam[];
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -486,6 +544,8 @@ function EventRowComponent({
             projectId={projectId}
             workspaceId={workspaceId}
             event={row.event}
+            eventParams={row.params}
+            workspaceParams={workspaceParams}
             open={editOpen}
             onOpenChange={setEditOpen}
             customFieldDefinitions={Array.from(cfDefById.values())}

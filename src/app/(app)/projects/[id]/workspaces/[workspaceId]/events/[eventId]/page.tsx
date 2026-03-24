@@ -14,10 +14,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScreenContextSetter } from "@/components/assistant/screen-context-setter";
 import { getParameters } from "./actions";
+import { getWorkspaceParametersForLookup } from "../../actions";
 import { CreateParameterDialog } from "./create-parameter-dialog";
 import { ParameterTree } from "./parameter-tree";
 import { DataLayerSnippet } from "./datalayer-snippet";
 import { EventCustomFields } from "./event-custom-fields";
+import { AddParameterInput } from "../../add-parameter-input";
 
 export default async function EventDetailPage({
   params,
@@ -57,8 +59,9 @@ export default async function EventDetailPage({
     .limit(1);
   if (!event) notFound();
 
-  const [parameters, cfDefs, cfVals] = await Promise.all([
+  const [parameters, workspaceParams, cfDefs, cfVals] = await Promise.all([
     getParameters(projectId, workspaceId, eventId),
+    getWorkspaceParametersForLookup(projectId, workspaceId),
     db
       .select()
       .from(customFieldDefinitions)
@@ -200,10 +203,14 @@ export default async function EventDetailPage({
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Parameters</h2>
-          <CreateParameterDialog
+        </div>
+        <div className="mb-4">
+          <AddParameterInput
             projectId={projectId}
             workspaceId={workspaceId}
             eventId={eventId}
+            existingParams={workspaceParams}
+            linkedParamIds={parameters.map((p) => p.id)}
           />
         </div>
         {parameters.length > 0 ? (
@@ -216,14 +223,9 @@ export default async function EventDetailPage({
         ) : (
           <Card>
             <CardContent className="py-8 text-center">
-              <p className="text-sm text-muted-foreground mb-4">
-                No parameters yet. Add your first parameter.
+              <p className="text-sm text-muted-foreground">
+                No parameters yet. Search or create a parameter above.
               </p>
-              <CreateParameterDialog
-                projectId={projectId}
-                workspaceId={workspaceId}
-                eventId={eventId}
-              />
             </CardContent>
           </Card>
         )}

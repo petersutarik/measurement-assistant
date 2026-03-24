@@ -49,8 +49,7 @@ export function ParamHoverCard({
   return (
     <Popover>
       <PopoverTrigger
-        openOnHover
-        delay={200}
+        {...(readOnly ? { openOnHover: true, delay: 200 } : {})}
         render={
           <Badge variant="outline" className="text-xs font-mono cursor-pointer gap-1">
             {param.name}
@@ -116,6 +115,12 @@ function EditableDetails({
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState(param.name);
+  const [type, setType] = useState(param.type);
+  const [isRequired, setIsRequired] = useState(param.isRequired);
+  const [description, setDescription] = useState(param.description ?? "");
+  const [exampleValue, setExampleValue] = useState(param.exampleValue ?? "");
+  const [origin, setOrigin] = useState(param.origin ?? "");
 
   function saveField(
     field: "name" | "type" | "description" | "isRequired" | "exampleValue" | "origin",
@@ -143,11 +148,12 @@ function EditableDetails({
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">Name</Label>
         <Input
-          defaultValue={param.name}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
           className="h-7 text-sm font-mono"
-          onBlur={(e) => {
-            if (e.target.value.trim() !== param.name) {
-              saveField("name", e.target.value.trim());
+          onBlur={() => {
+            if (name.trim() && name.trim() !== param.name) {
+              saveField("name", name.trim());
             }
           }}
           onKeyDown={(e) => {
@@ -158,8 +164,13 @@ function EditableDetails({
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">Type</Label>
         <Select
-          defaultValue={param.type}
-          onValueChange={(v: string | null) => { if (v) saveField("type", v); }}
+          value={type}
+          onValueChange={(v: string | null) => {
+            if (v) {
+              setType(v);
+              saveField("type", v);
+            }
+          }}
         >
           <SelectTrigger className="h-7 text-sm">
             <SelectValue />
@@ -176,8 +187,11 @@ function EditableDetails({
       <div className="flex items-center gap-2">
         <Checkbox
           id={`req-${param.id}`}
-          defaultChecked={param.isRequired}
-          onCheckedChange={(v: boolean) => saveField("isRequired", Boolean(v))}
+          checked={isRequired}
+          onCheckedChange={(v: boolean) => {
+            setIsRequired(Boolean(v));
+            saveField("isRequired", Boolean(v));
+          }}
         />
         <Label htmlFor={`req-${param.id}`} className="text-xs">
           Required
@@ -186,12 +200,13 @@ function EditableDetails({
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">Description</Label>
         <Input
-          defaultValue={param.description ?? ""}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
           placeholder="Parameter description..."
           className="h-7 text-sm"
-          onBlur={(e) => {
-            if (e.target.value !== (param.description ?? "")) {
-              saveField("description", e.target.value);
+          onBlur={() => {
+            if (description !== (param.description ?? "")) {
+              saveField("description", description);
             }
           }}
           onKeyDown={(e) => {
@@ -202,12 +217,13 @@ function EditableDetails({
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">Example value</Label>
         <Input
-          defaultValue={param.exampleValue ?? ""}
+          value={exampleValue}
+          onChange={(e) => setExampleValue(e.target.value)}
           placeholder="e.g. ABC123"
           className="h-7 text-sm font-mono"
-          onBlur={(e) => {
-            if (e.target.value !== (param.exampleValue ?? "")) {
-              saveField("exampleValue", e.target.value);
+          onBlur={() => {
+            if (exampleValue !== (param.exampleValue ?? "")) {
+              saveField("exampleValue", exampleValue);
             }
           }}
           onKeyDown={(e) => {
@@ -218,12 +234,13 @@ function EditableDetails({
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">Origin</Label>
         <Input
-          defaultValue={param.origin ?? ""}
+          value={origin}
+          onChange={(e) => setOrigin(e.target.value)}
           placeholder="e.g. GTM, CMS..."
           className="h-7 text-sm"
-          onBlur={(e) => {
-            if (e.target.value !== (param.origin ?? "")) {
-              saveField("origin", e.target.value);
+          onBlur={() => {
+            if (origin !== (param.origin ?? "")) {
+              saveField("origin", origin);
             }
           }}
           onKeyDown={(e) => {

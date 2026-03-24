@@ -155,6 +155,27 @@ export async function getWorkspaceParameters(
   }));
 }
 
+export async function getWorkspaceParametersForLookup(
+  projectId: string,
+  workspaceId: string
+) {
+  await requireWorkspace(projectId, workspaceId);
+
+  return db
+    .select({
+      id: parameters.id,
+      name: parameters.name,
+      type: parameters.type,
+      description: parameters.description,
+      isRequired: parameters.isRequired,
+      exampleValue: parameters.exampleValue,
+      origin: parameters.origin,
+    })
+    .from(parameters)
+    .where(eq(parameters.specVersionId, workspaceId))
+    .orderBy(parameters.name);
+}
+
 export async function getEvents(
   projectId: string,
   workspaceId: string
