@@ -1,0 +1,666 @@
+{
+  "$schema": "https://measurement-assistant.dev/spec/v1.json",
+  "version": 1,
+  "project": {
+    "name": "Acme E-commerce",
+    "url": "https://acme.com",
+    "type": "ecommerce",
+    "description": "Multi-brand outdoor gear retailer"
+  },
+
+  "parameters": {
+    "user_id": {
+      "type": "string",
+      "scope": "global",
+      "origin": "backend",
+      "description": "Authenticated user ID, present on all events when logged in"
+    },
+    "logged_in": {
+      "type": "boolean",
+      "scope": "global",
+      "origin": "backend",
+      "description": "Whether the user is authenticated"
+    },
+    "page_type": {
+      "type": "string",
+      "scope": "global",
+      "origin": "computed",
+      "enum": ["homepage", "plp", "pdp", "cart", "checkout", "thankyou", "blog", "other"],
+      "description": "Page template classification"
+    },
+    "transaction_id": {
+      "type": "string",
+      "required": true,
+      "origin": "backend",
+      "description": "Unique order identifier from payment processor"
+    },
+    "value": {
+      "type": "number",
+      "required": true,
+      "origin": "backend",
+      "description": "Monetary value of the action"
+    },
+    "currency": {
+      "type": "string",
+      "required": true,
+      "origin": "backend",
+      "pattern": "^[A-Z]{3}$",
+      "exampleValue": "EUR",
+      "description": "ISO 4217 currency code"
+    },
+    "items": {
+      "type": "array",
+      "description": "List of products involved in the action",
+      "items": {
+        "item_id": {
+          "type": "string",
+          "required": true,
+          "origin": "backend",
+          "description": "Product SKU"
+        },
+        "item_name": {
+          "type": "string",
+          "required": true,
+          "origin": "backend",
+          "description": "Product display name"
+        },
+        "item_category": {
+          "type": "string",
+          "origin": "backend",
+          "description": "Primary product category"
+        },
+        "price": {
+          "type": "number",
+          "required": true,
+          "origin": "backend",
+          "description": "Unit price"
+        },
+        "quantity": {
+          "type": "number",
+          "origin": "frontend",
+          "exampleValue": "1",
+          "description": "Number of units"
+        },
+        "discount": {
+          "type": "number",
+          "origin": "backend",
+          "description": "Discount amount per unit"
+        }
+      }
+    },
+    "coupon": {
+      "type": "string",
+      "origin": "backend",
+      "description": "Applied coupon code"
+    },
+    "shipping_tier": {
+      "type": "string",
+      "origin": "backend",
+      "enum": ["standard", "express", "next_day"],
+      "description": "Selected shipping method"
+    },
+    "payment_method": {
+      "type": "string",
+      "origin": "backend",
+      "enum": ["credit_card", "paypal", "apple_pay", "klarna"],
+      "description": "Payment method used"
+    },
+    "cta_id": {
+      "type": "string",
+      "required": true,
+      "origin": "dom",
+      "description": "data-cta-id attribute on clicked element"
+    },
+    "cta_text": {
+      "type": "string",
+      "origin": "dom",
+      "description": "Visible text of the CTA"
+    },
+    "form_id": {
+      "type": "string",
+      "required": true,
+      "origin": "dom",
+      "description": "Form identifier (id attribute or data-form-id)"
+    },
+    "form_name": {
+      "type": "string",
+      "origin": "dom",
+      "description": "Human-readable form name"
+    },
+    "search_term": {
+      "type": "string",
+      "required": true,
+      "origin": "frontend",
+      "description": "User's search query"
+    },
+    "search_results_count": {
+      "type": "number",
+      "origin": "backend",
+      "description": "Number of results returned"
+    },
+    "email_source": {
+      "type": "string",
+      "origin": "dom",
+      "enum": ["footer", "popup", "inline", "exit_intent"],
+      "description": "Where the email signup form is located on the page"
+    },
+    "user_data": {
+      "type": "object",
+      "description": "Enhanced conversions user data object — PII for server-side matching",
+      "origin": "backend",
+      "items": {
+        "email": {
+          "type": "string",
+          "required": true,
+          "origin": "backend",
+          "description": "SHA256-hashed email address"
+        },
+        "phone_number": {
+          "type": "string",
+          "origin": "backend",
+          "description": "SHA256-hashed phone in E.164 format"
+        },
+        "first_name": {
+          "type": "string",
+          "origin": "backend",
+          "description": "SHA256-hashed first name, lowercase, trimmed"
+        },
+        "last_name": {
+          "type": "string",
+          "origin": "backend",
+          "description": "SHA256-hashed last name, lowercase, trimmed"
+        },
+        "address": {
+          "type": "object",
+          "origin": "backend",
+          "description": "Hashed address fields for address matching",
+          "items": {
+            "street": {
+              "type": "string",
+              "origin": "backend",
+              "description": "SHA256-hashed street address"
+            },
+            "city": {
+              "type": "string",
+              "origin": "backend",
+              "description": "SHA256-hashed city name, lowercase"
+            },
+            "region": {
+              "type": "string",
+              "origin": "backend",
+              "description": "SHA256-hashed state/region code"
+            },
+            "postal_code": {
+              "type": "string",
+              "origin": "backend",
+              "description": "SHA256-hashed postal/ZIP code"
+            },
+            "country": {
+              "type": "string",
+              "origin": "backend",
+              "description": "ISO 3166-1 alpha-2 country code",
+              "exampleValue": "US"
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "events": [
+    {
+      "name": "page_view",
+      "description": "Virtual page view for SPA navigation",
+      "category": "core",
+      "parameters": [],
+      "triggers": [
+        {
+          "name": "All pages",
+          "trigger": "Route change or initial page load",
+          "source": "client"
+        }
+      ]
+    },
+    {
+      "name": "view_item_list",
+      "description": "User views a list of products",
+      "category": "ecommerce",
+      "parameters": ["items"],
+      "triggers": [
+        {
+          "name": "Category page",
+          "trigger": "Product grid renders on PLP",
+          "pagePattern": "/category/*",
+          "exampleUrl": "https://acme.com/category/running-shoes",
+          "screenshots": ["https://placehold.co/400x300/e2e8f0/475569?text=PLP+Product+Grid"],
+          "source": "client",
+          "values": {
+            "items": [{"item_id": "SKU-001", "item_name": "Trail Runner Pro", "price": 129.99}]
+          }
+        },
+        {
+          "name": "Search results",
+          "trigger": "Search results render",
+          "pagePattern": "/search?q=*",
+          "source": "client",
+          "values": {
+            "items": [{"item_id": "SKU-042", "item_name": "Hiking Boot X", "price": 189.99}]
+          }
+        }
+      ]
+    },
+    {
+      "name": "view_item",
+      "description": "User views a product detail page",
+      "category": "ecommerce",
+      "parameters": ["items", "currency"],
+      "triggers": [
+        {
+          "name": "Product detail page",
+          "trigger": "PDP load",
+          "pagePattern": "/product/*",
+          "source": "client",
+          "values": {
+            "currency": "EUR",
+            "items": [{"item_id": "SKU-001", "item_name": "Trail Runner Pro", "price": 129.99, "quantity": 1}]
+          }
+        }
+      ]
+    },
+    {
+      "name": "add_to_cart",
+      "description": "Product added to cart",
+      "category": "ecommerce",
+      "parameters": ["items", "currency", "value"],
+      "triggers": [
+        {
+          "name": "PDP add to cart",
+          "trigger": "Add to cart button click on product detail page",
+          "pagePattern": "/product/*",
+          "exampleUrl": "https://acme.com/product/trail-runner-pro",
+          "screenshots": ["https://placehold.co/400x300/e2e8f0/475569?text=PDP+Add+to+Cart"],
+          "source": "client",
+          "values": {
+            "currency": "EUR",
+            "value": 129.99,
+            "items": [{"item_id": "SKU-001", "item_name": "Trail Runner Pro", "price": 129.99, "quantity": 1}]
+          }
+        },
+        {
+          "name": "Quick add from PLP",
+          "trigger": "Quick add button on product card",
+          "pagePattern": "/category/*",
+          "exampleUrl": "https://acme.com/category/running-shoes",
+          "screenshots": ["https://placehold.co/400x300/e2e8f0/475569?text=PLP+Quick+Add"],
+          "source": "client",
+          "values": {
+            "currency": "EUR",
+            "value": 89.99,
+            "items": [{"item_id": "SKU-007", "item_name": "Day Pack 25L", "price": 89.99, "quantity": 1}]
+          }
+        }
+      ]
+    },
+    {
+      "name": "begin_checkout",
+      "description": "User starts checkout flow",
+      "category": "ecommerce",
+      "parameters": ["items", "currency", "value", "coupon", "user_data"],
+      "conversion": {
+        "isPrimary": false,
+        "valueParameter": "value",
+        "currencyParameter": "currency"
+      },
+      "triggers": [
+        {
+          "name": "Checkout start",
+          "trigger": "Checkout page load or cart to checkout transition",
+          "pagePattern": "/checkout",
+          "source": "client",
+          "values": {
+            "currency": "EUR",
+            "value": 219.98,
+            "items": [
+              {"item_id": "SKU-001", "item_name": "Trail Runner Pro", "price": 129.99, "quantity": 1},
+              {"item_id": "SKU-007", "item_name": "Day Pack 25L", "price": 89.99, "quantity": 1}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "purchase",
+      "description": "Transaction completed successfully",
+      "category": "ecommerce",
+      "parameters": ["transaction_id", "value", "currency", "items", "coupon", "shipping_tier", "payment_method", "user_data"],
+      "conversion": {
+        "isPrimary": true,
+        "valueParameter": "value",
+        "currencyParameter": "currency"
+      },
+      "triggers": [
+        {
+          "name": "Order confirmation",
+          "trigger": "Thank you page load after successful payment",
+          "pagePattern": "/checkout/thank-you",
+          "source": "client",
+          "parameters": ["transaction_id", "value", "currency", "items", "coupon", "shipping_tier", "payment_method"],
+          "values": {
+            "transaction_id": "ORD-20260325-001",
+            "value": 219.98,
+            "currency": "EUR",
+            "shipping_tier": "standard",
+            "payment_method": "credit_card",
+            "items": [
+              {"item_id": "SKU-001", "item_name": "Trail Runner Pro", "price": 129.99, "quantity": 1},
+              {"item_id": "SKU-007", "item_name": "Day Pack 25L", "price": 89.99, "quantity": 1}
+            ]
+          }
+        },
+        {
+          "name": "Server-side confirmation",
+          "trigger": "Payment processor webhook",
+          "source": "server",
+          "parameters": ["transaction_id", "value", "currency"],
+          "values": {
+            "transaction_id": "ORD-20260325-001",
+            "value": 219.98,
+            "currency": "EUR"
+          }
+        }
+      ]
+    },
+    {
+      "name": "cta_click",
+      "description": "Call-to-action button click",
+      "category": "engagement",
+      "parameters": ["cta_id", "cta_text"],
+      "triggers": [
+        {
+          "name": "Hero CTA",
+          "trigger": "Main hero banner button click",
+          "pagePattern": "/",
+          "source": "client",
+          "values": { "cta_id": "hero-shop-now", "cta_text": "Shop Now" }
+        },
+        {
+          "name": "Pricing CTA",
+          "trigger": "Pricing tier select button",
+          "pagePattern": "/pricing",
+          "source": "client",
+          "values": { "cta_id": "pricing-pro", "cta_text": "Choose Pro" }
+        }
+      ]
+    },
+    {
+      "name": "form_submit",
+      "description": "Form submission",
+      "category": "lead_generation",
+      "parameters": ["form_id", "form_name", "cta_id", "email_source", "user_data"],
+      "conversion": {
+        "isPrimary": false,
+        "valueParameter": null,
+        "currencyParameter": null
+      },
+      "triggers": [
+        {
+          "name": "Contact form",
+          "trigger": "Contact form submission",
+          "pagePattern": "/contact",
+          "source": "client",
+          "parameters": ["form_id", "form_name", "cta_id"],
+          "values": { "form_id": "contact-form", "form_name": "Contact Us", "cta_id": "contact-submit" }
+        },
+        {
+          "name": "Newsletter signup (footer)",
+          "trigger": "Newsletter form in footer",
+          "pagePattern": "*",
+          "source": "client",
+          "parameters": ["form_id", "form_name", "cta_id", "email_source"],
+          "values": { "form_id": "newsletter", "form_name": "Newsletter", "cta_id": "newsletter-subscribe", "email_source": "footer" }
+        },
+        {
+          "name": "Newsletter signup (popup)",
+          "trigger": "Exit-intent newsletter popup",
+          "pagePattern": "*",
+          "source": "client",
+          "parameters": ["form_id", "form_name", "cta_id", "email_source"],
+          "values": { "form_id": "newsletter-popup", "form_name": "Newsletter", "cta_id": "popup-subscribe", "email_source": "exit_intent" }
+        }
+      ]
+    },
+    {
+      "name": "search",
+      "description": "Site search performed",
+      "category": "engagement",
+      "parameters": ["search_term", "search_results_count"],
+      "triggers": [
+        {
+          "name": "Search bar",
+          "trigger": "Search form submission or autocomplete select",
+          "source": "client",
+          "values": { "search_term": "hiking boots", "search_results_count": 24 }
+        }
+      ]
+    }
+  ],
+
+  "destinations": [
+    {
+      "platform": "ga4",
+      "config": { "measurementId": "G-XXXXXXXXXX" },
+      "consent": { "required": "analytics", "mode": "advanced" },
+      "eventSettings": {
+        "parameters": ["page_type"],
+        "userProperties": ["user_id", "logged_in"]
+      }
+    },
+    {
+      "platform": "meta-capi",
+      "config": { "pixelId": "1234567890" },
+      "consent": { "required": "marketing" },
+      "tagSettings": {
+        "template": "stape-facebook-pixel",
+        "enableDataLayerMapping": true,
+        "enableAdvancedMatching": true,
+        "eventEnhancement": false,
+        "disableAutoConfig": true,
+        "disablePushState": true,
+        "notes": "With enableDataLayerMapping, the Stape template auto-transforms GA4 ecommerce items[] to Meta contents[]/content_ids[]. Parameter transforms in destinationMappings are documentation-only — the template handles the actual conversion."
+      }
+    }
+  ],
+
+  "destinationMappings": [
+    {
+      "sourceEvent": "page_view",
+      "mappings": [
+        { "destination": "ga4", "destinationEvent": "page_view", "useEventSettings": true, "parameters": [] },
+        { "destination": "meta-capi", "destinationEvent": "PageView", "parameters": [] }
+      ]
+    },
+    {
+      "sourceEvent": "view_item",
+      "mappings": [
+        {
+          "destination": "ga4",
+          "destinationEvent": "view_item",
+          "useEventSettings": true,
+          "parameters": [
+            { "source": "currency", "dest": "currency" },
+            { "source": "items", "dest": "items" }
+          ]
+        },
+        {
+          "destination": "meta-capi",
+          "destinationEvent": "ViewContent",
+          "parameters": [
+            { "source": "currency", "dest": "currency" },
+            { "source": "value", "dest": "value" },
+            {
+              "source": "items", "dest": "content_ids",
+              "transform": "pluck", "field": "item_id",
+              "description": "items.map(i => i.item_id)"
+            },
+            {
+              "source": "items", "dest": "content_category",
+              "transform": "pluck", "field": "item_category",
+              "description": "items.map(i => i.item_category)[0]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sourceEvent": "add_to_cart",
+      "mappings": [
+        {
+          "destination": "ga4",
+          "destinationEvent": "add_to_cart",
+          "useEventSettings": true,
+          "parameters": [
+            { "source": "currency", "dest": "currency" },
+            { "source": "value", "dest": "value" },
+            { "source": "items", "dest": "items" }
+          ]
+        },
+        {
+          "destination": "meta-capi",
+          "destinationEvent": "AddToCart",
+          "parameters": [
+            { "source": "currency", "dest": "currency" },
+            { "source": "value", "dest": "value" },
+            {
+              "source": "items", "dest": "content_ids",
+              "transform": "pluck", "field": "item_id",
+              "description": "items.map(i => i.item_id)"
+            },
+            {
+              "source": "items", "dest": "contents",
+              "transform": "mapObject",
+              "fields": {
+                "item_id": "id",
+                "item_name": "name",
+                "price": "item_price",
+                "quantity": "quantity"
+              },
+              "description": "items.map(i => ({ id: i.item_id, name: i.item_name, item_price: i.price, quantity: i.quantity }))"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sourceEvent": "begin_checkout",
+      "mappings": [
+        {
+          "destination": "ga4",
+          "destinationEvent": "begin_checkout",
+          "useEventSettings": true,
+          "parameters": [
+            { "source": "currency", "dest": "currency" },
+            { "source": "value", "dest": "value" },
+            { "source": "items", "dest": "items" },
+            { "source": "coupon", "dest": "coupon" }
+          ]
+        },
+        {
+          "destination": "meta-capi",
+          "destinationEvent": "InitiateCheckout",
+          "parameters": [
+            { "source": "currency", "dest": "currency" },
+            { "source": "value", "dest": "value" },
+            {
+              "source": "items", "dest": "content_ids",
+              "transform": "pluck", "field": "item_id",
+              "description": "items.map(i => i.item_id)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sourceEvent": "purchase",
+      "mappings": [
+        {
+          "destination": "ga4",
+          "destinationEvent": "purchase",
+          "useEventSettings": true,
+          "parameters": [
+            { "source": "transaction_id", "dest": "transaction_id" },
+            { "source": "value", "dest": "value" },
+            { "source": "currency", "dest": "currency" },
+            { "source": "items", "dest": "items" },
+            { "source": "coupon", "dest": "coupon" },
+            { "source": "shipping_tier", "dest": "shipping_tier" },
+            { "source": "payment_method", "dest": "payment_type" }
+          ]
+        },
+        {
+          "destination": "meta-capi",
+          "destinationEvent": "Purchase",
+          "parameters": [
+            { "source": "transaction_id", "dest": "event_id" },
+            { "source": "value", "dest": "value" },
+            { "source": "currency", "dest": "currency" },
+            {
+              "source": "items", "dest": "content_ids",
+              "transform": "pluck", "field": "item_id",
+              "description": "items.map(i => i.item_id)"
+            },
+            {
+              "source": "items", "dest": "contents",
+              "transform": "mapObject",
+              "fields": {
+                "item_id": "id",
+                "item_name": "name",
+                "price": "item_price",
+                "quantity": "quantity"
+              },
+              "description": "items.map(i => ({ id: i.item_id, name: i.item_name, item_price: i.price, quantity: i.quantity }))"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sourceEvent": "form_submit",
+      "mappings": [
+        {
+          "destination": "ga4",
+          "destinationEvent": "generate_lead",
+          "useEventSettings": true,
+          "parameters": [
+            { "source": "form_id", "dest": "form_id" },
+            { "source": "form_name", "dest": "form_name" }
+          ]
+        },
+        {
+          "destination": "meta-capi",
+          "destinationEvent": "Lead",
+          "parameters": []
+        }
+      ]
+    },
+    {
+      "sourceEvent": "search",
+      "mappings": [
+        {
+          "destination": "ga4",
+          "destinationEvent": "search",
+          "useEventSettings": true,
+          "parameters": [
+            { "source": "search_term", "dest": "search_term" }
+          ]
+        },
+        {
+          "destination": "meta-capi",
+          "destinationEvent": "Search",
+          "parameters": [
+            { "source": "search_term", "dest": "search_string" }
+          ]
+        }
+      ]
+    }
+  ]
+}
