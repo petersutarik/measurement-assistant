@@ -69,7 +69,6 @@ interface AppSidebarProps {
 
 const workspaceNav = [
   { href: "/specs", icon: FileCode, label: "Specs" },
-  { href: "/destinations", icon: Send, label: "Destinations" },
 ] as const;
 
 export function AppSidebar({ user, projects }: AppSidebarProps) {
@@ -260,6 +259,22 @@ export function AppSidebar({ user, projects }: AppSidebarProps) {
                   >
                     <FileText className="size-4" />
                     <span>Documents</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    render={
+                      <Link
+                        href={`/projects/${selectedProject.id}/destinations`}
+                      />
+                    }
+                    isActive={pathname.startsWith(
+                      `/projects/${selectedProject.id}/destinations`
+                    )}
+                    tooltip="Destinations"
+                  >
+                    <Send className="size-4" />
+                    <span>Destinations</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <Collapsible

@@ -112,6 +112,13 @@ export const mappingTypeEnum = pgEnum("mapping_type", [
   "static",
 ]);
 
+// GTM deployments
+export const gtmDeploymentStatusEnum = pgEnum("gtm_deployment_status", [
+  "pending",
+  "completed",
+  "failed",
+]);
+
 // Plans
 export const planStatusEnum = pgEnum("plan_status", [
   "draft",
